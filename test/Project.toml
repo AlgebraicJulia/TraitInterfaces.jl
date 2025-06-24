@@ -1,0 +1,5 @@
+[deps]
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+StructEquality = "6ec83bb0-ed9f-11e9-3b4c-2b04cb4e219c"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+TraitInterfaces = "228235be-7709-4868-9089-276e3dee9f94"
