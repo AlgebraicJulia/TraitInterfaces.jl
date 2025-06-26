@@ -52,7 +52,17 @@ end
 """ `sorts` not required unless there is overloading """
 function lookup(i::Interface, s::Symbol, sorts::Maybe{Vector{AlgSort}}=nothing)
   d = i.lookup[s]
-  i[d[isnothing(sorts) ? only(keys(d)) : sorts]]
+  
+  sortkey = if isnothing(sorts)
+    isempty(keys(d)) && error("Cannot find any methods for $s")
+    only(keys(d)) 
+  else 
+    sorts
+  end
+
+  haskey(d, sortkey) || error("Cannot find $s method with sorts $sorts \n \
+    alternatives: $(keys(d))")
+  i[d[sortkey]]
 end
 
 Base.getindex(f::Interface, i) = f.judgments[i]
@@ -63,12 +73,38 @@ Base.copy(f::Interface) = Interface(f.name, deepcopy(f.judgments),
 
 Base.length(f::Interface) = length(f.judgments)
 
+function Base.in(x::Judgment, f::Interface)
+  x ∈ f.judgments
+end
+
+function Base.union!(I::Interface, J::Interface)
+  for j in J.judgments
+    j ∈ I || add_judgment!(I, j)
+  end
+  for (k, v) in J.aliases
+    add_alias!(I, k, v)
+  end
+  I
+end
+
+
 allnames(f::Interface) = nameof.(filter(x->!(x isa AlgAxiom), f.judgments))
 
 sorts(f::Interface) = AlgSort.(nameof.(f[sort(collect(f.types))]))
 
 abstract_sorts(Th::Interface) = 
   filter(s->!haskey(Th.external, nameof(s)), sorts(Th))
+
+# mutating 
+###########
+function add_alias!(i::Interface, alias::Symbol, name::Symbol)
+  if haskey(i.aliases, alias)
+    i.aliases[alias] == name || error("Cannot add conflicting alias $alias => \
+      $name (already bound to $(i.aliases[alias]))")
+  else 
+    i.aliases[alias] = name
+  end
+end
 
 function add_judgment!(i::Interface, j::Judgment) 
   push!(i.judgments, j)
@@ -101,6 +137,7 @@ end
 _add_judgment!(i::Interface, ::AlgAxiom, n::Int) = push!(i.axioms, n)
 
 function add_lookup!(f::Interface, n::Symbol, ty::Vector{AlgSort}, i::Int)
-  haskey(f.lookup[n], ty) && error("Duplicate name + args combo!")
+  haskey(f.lookup[n], ty) && error(
+    "Duplicate name + args combo! $(f.lookup[n]) $ty")
   f.lookup[n][ty] = i
 end

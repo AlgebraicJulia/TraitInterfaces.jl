@@ -3,6 +3,7 @@ module Parsing
 using MLStyle
 using Markdown
 using ...MetaUtils: fqmn, fq_eval
+using ..Algorithms: rename
 using ..Interfaces, ..Algorithms, ..Syntax
 
 """ Parse markdown coming out of @doc programatically. """
@@ -12,13 +13,28 @@ function mdp(x::Base.Docs.DocStr)
   Markdown.parse(only(x.text))
 end
 
-function parse_gat_line!(theory::Interface, e::Expr, linenumber, current_module::Vector{Symbol})
+unquote(s::Symbol) = s 
+unquote(s::QuoteNode) = s.value
+
+function parse_line!(theory::Interface, e::Expr, linenumber, current_module::Vector{Symbol})
   try
     @match e begin
-      # need to import struct type feature from GATlab
-      Expr(:call, :⊣, Expr(:struct, _...), ctx) => 
-        parse_struct!(theory, e.args[2], linenumber, ctx)
-      
+      Expr(:tuple, arg1, args...) => begin
+        @match arg1 begin 
+          Expr(:call, :(=>), Expr(:using, Expr(:(:), Expr(:(.), base_theory), 
+               Expr(:(.), first_key))), first_val) => begin
+            args′ = map(args) do arg
+              (arg.head, arg.args[1]) == (:call, :(=>)) || error("Bad")
+              unquote(arg.args[2]) => unquote(arg.args[3])
+            end
+            rename_dict = Dict{Symbol, Symbol}([
+              unquote(first_key) => unquote(first_val); args′])
+            I = fq_eval([current_module; base_theory]).Meta.theory
+            union!(theory, rename(I, rename_dict))
+          end
+          _ => error("Cannot parse")
+        end 
+      end
       Expr(:macrocall, mac, _, aliasexpr) => begin
         lines = @match aliasexpr begin
           Expr(:block, lines...) => lines
@@ -36,7 +52,7 @@ function parse_gat_line!(theory::Interface, e::Expr, linenumber, current_module:
                 name ∈ Interfaces.allnames(theory) || error(
                   "Cannot declare alias $alias for $name: $name doesn't exist")
 
-                theory.aliases[alias] = name
+                Interfaces.add_alias!(theory, alias, name)
               @case _
                 error("could not match @op expression $line")
             end
@@ -75,10 +91,16 @@ function parse_binding_line!(theory::Interface, e, linenumber)::Int
 
   @match head begin
     Expr(:(:=), name, equation) => @match equation begin 
-      Expr(:call, :(==), _, _) => parseaxiom!(theory, localcontext, type_expr, equation; name)
+      Expr(:call, :(==), a,b) => begin 
+        parseaxiom!(theory, localcontext, type_expr, [a,b]; name)
+      end
+      Expr(:comparison, args...) => begin 
+          parseaxiom!(theory, localcontext, type_expr, args[1:2:end]; name)
+      end
       _ => parsefunction!(theory, localcontext, type_expr, name, equation)
     end
-    Expr(:call, :(==), _, _) => parseaxiom!(theory, localcontext, type_expr, head)
+    Expr(:call, :(==), t1, t2) => parseaxiom!(theory, localcontext, type_expr, [t1,t2])
+    Expr(:comparison, args...) => parseaxiom!(theory, localcontext, type_expr, args[1:2:end])
     _ => parseconstructor!(theory, localcontext, type_expr, head)
   end
 end
@@ -177,22 +199,17 @@ end
 
 
 
-function parseaxiom!(theory::Interface, localcontext, sort_expr, e; name=nothing)
-  @match e begin
-    Expr(:call, :(==), lhs_expr, rhs_expr) => begin
-      equands = parseterm.(Ref(theory), Ref(localcontext), [lhs_expr, rhs_expr])
-      sorts = sortcheck.(Ref(theory), Ref(localcontext), equands)
-      @assert allequal(sorts)
-      sort = if isnothing(sort_expr)
-        first(sorts)
-      else
-        fromexpr(c, sort_expr, AlgSort)
-      end
-      ax = AlgAxiom(name, localcontext, sort, equands)
-      Interfaces.add_judgment!(theory, ax)
-    end
-    _ => error("failed to parse equation from $e")
+function parseaxiom!(theory::Interface, localcontext, sort_expr, terms; name=nothing)
+  equands = parseterm.(Ref(theory), Ref(localcontext), terms)
+  sorts = sortcheck.(Ref(theory), Ref(localcontext), equands)
+  @assert allequal(sorts)
+  sort = if isnothing(sort_expr)
+    first(sorts)
+  else
+    fromexpr(c, sort_expr, AlgSort)
   end
+  ax = AlgAxiom(name, localcontext, sort, equands)
+  Interfaces.add_judgment!(theory, ax)
 end
 
 
@@ -204,12 +221,15 @@ be written with some algorithm that recalculates precedence.
 function normalize_judgment(e)
   @match e begin
     :($name := $lhs == $rhs :: $typ ⊣ $ctx) => :((($name := ($lhs == $rhs)) :: $typ) ⊣ $ctx)
+    :($name := $lhs == $ms == $rhs :: $typ ⊣ $ctx) => :((($name := ($lhs == $ms == $rhs)) :: $typ) ⊣ $ctx)
     :($lhs == $rhs :: $typ ⊣ $ctx) => :((($lhs == $rhs) :: $typ) ⊣ $ctx)
+    :($lhs == $ms == $rhs :: $typ ⊣ $ctx) => :((($lhs == $ms == $rhs) :: $typ) ⊣ $ctx)
     :(($lhs == $rhs :: $typ) ⊣ $ctx) => :((($lhs == $rhs) :: $typ) ⊣ $ctx)
     :($trmcon :: $typ ⊣ $ctx) => :(($trmcon :: $typ) ⊣ $ctx)
     :($name := $lhs == $rhs ⊣ $ctx) => :((($name := ($lhs == $rhs))) ⊣ $ctx)
     :($name := $fun ⊣ $ctx) => :(($name := $fun) ⊣ $ctx)
     :($lhs == $rhs ⊣ $ctx) => :(($lhs == $rhs) ⊣ $ctx)
+    :($lhs == $ms == $rhs ⊣ $ctx) => :(($lhs == $ms == $rhs) ⊣ $ctx)
     :($(trmcon::Symbol) ⊣ $ctx) => :(($trmcon :: default) ⊣ $ctx)
     :($f($(args...)) ⊣ $ctx) && if f ∉ [:(==), :(⊣)] end => :(($f($(args...)) :: default) ⊣ $ctx)
     trmcon::Symbol => :($trmcon :: default)

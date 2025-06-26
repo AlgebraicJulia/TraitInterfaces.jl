@@ -104,7 +104,7 @@ function theory_impl(head, body, __module__)
       l::LineNumberNode => begin
         linenumber = l
       end
-      _ => Parsing.parse_gat_line!(theory, line, linenumber, current_module)
+      _ => Parsing.parse_line!(theory, line, linenumber, current_module)
     end
   end
   theory

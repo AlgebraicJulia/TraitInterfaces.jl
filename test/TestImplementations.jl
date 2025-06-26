@@ -1,6 +1,7 @@
 module TestImplementations 
 
-using TraitInterfaces, Test, StructEquality, LinearAlgebra, REPL, StaticArrays
+using TraitInterfaces, Test, StructEquality, REPL, StaticArrays
+import LinearAlgebra
 
 # Helper functions
 
@@ -27,7 +28,7 @@ import .MyModule: SpecialType
   @import SpecialType::TYPE
 
   Hom(dom::Ob, codom::Ob)::TYPE
-  @op (→) := Hom
+  @op (→) := Hom # alias for Hom
 
   id(A::Ob)::(A → A)
 end
@@ -85,7 +86,7 @@ wm = WithModel(FinSetC())
 end
 
 @test_throws MissingMethodImplementation @instance ThTest{Ob=Int, Hom=Matrix{T}} [model::MatC{T}] where T begin
-  id(n::Int) = Matrix{T}(I,n,n)
+  id(n::Int) = Matrix{T}(LinearAlgebra.I,n,n)
 end
 
 
@@ -133,7 +134,7 @@ end
 
 @instance ThTest{Ob=Int, Hom=Matrix{T}} [model::MatC{T}] where T begin
   compose(m::Matrix{T}, n::Matrix{T}) = m * n
-  id(n::Int) = Matrix{T}(I,n,n)
+  id(n::Int) = Matrix{T}(LinearAlgebra.I,n,n)
   one(::SpecialType) = 1
 end
 
@@ -150,5 +151,6 @@ w = TestWrapper(MatC{Int}())
 
 x = TestTypedWrapper(MatC{Int}())
 @test x isa TestTypedWrapper{Int, Matrix{Int}}
+
 
 end # module
