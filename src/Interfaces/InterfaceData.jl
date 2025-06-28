@@ -1,16 +1,11 @@
+module InterfaceData
 
 export Interface, lookup, sorts, abstract_sorts, signature
 
 using StructEquality
 using DataStructures
 
-using .Syntax
-using .Syntax: Maybe
-
-
-#############
-# Interface # 
-#############
+using ..Syntax
 
 """
 An interface has types, operations, and equations.
@@ -141,3 +136,5 @@ function add_lookup!(f::Interface, n::Symbol, ty::Vector{AlgSort}, i::Int)
     "Duplicate name + args combo! $(f.lookup[n]) $ty")
   f.lookup[n][ty] = i
 end
+
+end # module

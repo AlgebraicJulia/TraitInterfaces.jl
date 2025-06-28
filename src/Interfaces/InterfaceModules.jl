@@ -42,17 +42,6 @@ The `Dispatch` implementation of an interface defers to type-dispatch.
   jltypes::Dict{AlgSort, Type}
 end
 
-Base.get(d::Dispatch) = d.jltypes
-
-Dispatch(theory_module::Module, types::AbstractVector{<:Type}) = 
-  Dispatch(theory_module.Meta.theory, types)
-
-function Dispatch(theory_module::Interface, types::AbstractVector{<:Type}) 
-  s = sorts(theory_module)
-  length(s) == length(types) || error("Bad length of type vector")
-  Dispatch(Dict(zip(s, types)))
-end
-
 """
 The Initial model assigns `Union{}` to all AlgSorts. There is one implementation
 for any given theory.
@@ -70,7 +59,7 @@ implementation for any given theory.
 # Constructing an interface module #
 ####################################
 
-# Same thing as @interface
+""" Same thing as `@interface` """
 macro theory(head, body) 
   theory_impl(head, body, __module__)
 end
@@ -130,7 +119,7 @@ function theory_impl(head, body, __module__)
   modulelines = Any[]
 
   # this exports the names of the module, e.g. :default, :⋅, :e 
-  push!(modulelines, :(export $(Interfaces.allnames(theory)...)))
+  push!(modulelines, :(export $(InterfaceData.allnames(theory)...)))
 
   push!(
     modulelines,

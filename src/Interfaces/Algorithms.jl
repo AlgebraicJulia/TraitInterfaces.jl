@@ -3,7 +3,7 @@ module Algorithms
 export sortcheck, rename
 
 using ..Interfaces, ..Syntax
-using ..Interfaces: add_judgment!
+using ..InterfaceData: add_judgment!, add_alias!
 
 """
 Throw an error if a the head of an AlgTerm (which refers to a term constructor)
@@ -21,6 +21,14 @@ function sortcheck(theory::Interface, ctx::TypeScope, t::AlgTerm)::AlgSort
   end
 end
 
+#######################
+# Renaming interfaces #
+#######################
+
+"""
+This is boilerplate for the systematic renaming of types/operations in an 
+interface.
+"""
 function rename(theory::Interface, names::Dict{Symbol, Symbol})
   I = Interface(theory.name)
   for j in theory.judgments
@@ -28,7 +36,7 @@ function rename(theory::Interface, names::Dict{Symbol, Symbol})
     add_judgment!(I, new_j)
   end
   for (k, v) in theory.aliases
-    Interfaces.add_alias!(I, get(names, k, k), get(names, v, v))
+    add_alias!(I, get(names, k, k), get(names, v, v))
   end
   I
 end
@@ -56,8 +64,8 @@ end
 
 rename(s::Symbol, names::Dict{Symbol,Symbol}) = get(names, s, s)
 
-function rename(j::MethodApp{T}, names::Dict{Symbol, Symbol}) where T
-  MethodApp{T}(get(names, j.method, j.method), rename.(j.args, Ref(names)))
+function rename(j::MethodApp, names::Dict{Symbol, Symbol})
+  MethodApp(get(names, j.method, j.method), rename.(j.args, Ref(names)))
 end
 
 

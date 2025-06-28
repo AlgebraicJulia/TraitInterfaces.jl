@@ -1,10 +1,9 @@
 """ General-purpose tools for metaprogramming in Julia.
 """
 module MetaUtils
-export JuliaFunction, setimpl, setname,
-  JuliaFunctionSig, parse_docstring, parse_function,
-  parse_function_sig, generate_docstring, generate_function,
-  concat_expr, strip_lines, Expr0, fqmn
+export JuliaFunction, setimpl, setname, JuliaFunctionSig, parse_docstring, 
+       parse_function, parse_function_sig, generate_docstring, 
+       generate_function, strip_lines, Expr0, fqmn
 
 using Base.Meta: ParseError
 using StructEquality

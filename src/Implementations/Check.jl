@@ -67,11 +67,12 @@ Machine-friendly access to checking if a model implements a particular
 operation. The `types` vector is in bijection with the AlgSorts of the
 *whole theory*. 
 """  
-function implements(m, theory::Module, x::Symbol, args::Vector{<:Type}, types::Vector{<:Type})
+function implements(m, theory::Module, x::Symbol, args::Vector{<:Type}, 
+                    types::Vector{<:Type})
   tc = lookup(theory.Meta.theory, x, args)
   name = nameof(getdecl(tc))
   typedict = Dict(zip(sorts(theory.Meta.theory), types))
-  types′ = Type[typedict[AlgSort(getvalue(tc[i]))] for i in tc.args]
+  types′ = Type[typedict[AlgSort(get(tc[i]))] for i in tc.args]
   return _implements(m, theory, name, types′)
 end
 

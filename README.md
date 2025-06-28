@@ -255,3 +255,11 @@ This is nice expressivity for typechecking expressions, though Julia isn't a nat
 # Relation to GATLab 
 
 This repo is the core of GATlab, developed by Owen Lynch and Kris Brown, based on Evan Patterson's original work on GATs (generalized algebraic theories) in Catlab. In this repo, the GAT aspects have been stripped away. Many projects in the AlgebraicJulia ecosystem rely on interfaces without using the understanding of interfaces as being the objects of category. GATlab will focus on this latter goal.
+
+# Documentation
+
+To locally build the documentation and the literate code examples, run the following in the command line:
+
+```
+julia --project=docs -e "using TraitInterfaces, LiveServer; servedocs(literate_dir=\"docs/literate\",skip_dir=\"docs/src/generated\")"
+```

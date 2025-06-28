@@ -1,7 +1,7 @@
 """ The things that constitute an interface """
 module Syntax 
 
-export MethodApp, AlgSort, AlgTerm, AlgType, Judgment, TypeScope, 
+export MethodApp, AlgSort, AlgTerm, AlgType, Judgment, TypeScope, Maybe,
        TypeConstructor, TermConstructor, AlgAxiom, AlgAccessor, signature
 
 using StructEquality
@@ -11,6 +11,9 @@ const Maybe{T} = Union{Nothing,T}
 #################################
 # Building blocks of interfaces #
 #################################
+
+""" Only subtyped by AlgTerm - need this to avoid a circular type definition """
+abstract type AbstractAlgTerm end
 
 """
 `MethodApp`
@@ -22,9 +25,9 @@ in fact be `AlgTerm`.
 `method` is the name of a `TermConstructor`, a `TypeConstructor` or an
 `AlgAccessor`.
 """
-@struct_hash_equal struct MethodApp{T}
+@struct_hash_equal struct MethodApp
   method::Symbol
-  args::Vector{T}
+  args::Vector{AbstractAlgTerm}
 end
 
 
@@ -39,34 +42,51 @@ end
 
 Base.nameof(s::AlgSort) = s.method
 
-@struct_hash_equal struct AlgTerm
-  body::Union{Symbol, MethodApp{AlgTerm}}
+"""
+A term, which is a variable name (Symbol) in some context or the application 
+of an operation to some other terms.
+"""
+@struct_hash_equal struct AlgTerm <: AbstractAlgTerm
+  body::Union{Symbol, MethodApp}
 end
 
 function AlgTerm(fun::Symbol, args::Vector{AlgTerm})
-  AlgTerm(MethodApp{AlgTerm}(fun, args))
+  AlgTerm(MethodApp(fun, args))
 end
 
+"""
+A (possibly dependent) type, represented as a type constructor applied to some 
+terms.
+"""
 @struct_hash_equal struct AlgType 
-  body::MethodApp{AlgTerm}
+  body::MethodApp
 end
 
+"""
+A type constructor, alternatively thought of as a (possibly-dependent) type 
+where we have forgotten the arguments it depends on. E.g. given a type 
+`Matrix{3,4}` for 3 × 4 matrices, the corresponding sort is `Matrix`.
+"""
 AlgSort(a::AlgType) = AlgSort(a.body.method) # discard the top level arguments
 
+#############
+# Judgments #
+#############
+
+""" Judgments constitute the content of an interface """
 abstract type Judgment end
 
 Base.nameof(t::Judgment) = t.name
 
-abstract type TrmTypConstructor <: Judgment end
-
-argsof(t::TrmTypConstructor) = t.args
-localcontext(t::TrmTypConstructor) = t.localcontext
-
-signature(t::TrmTypConstructor) = AlgSort.(last.(localcontext(t)[argsof(t)]))
+# TypeScopes
+#-----------
 
 """
-A context that a term or type can live in. It has a list of names bound to 
-types. 
+A context that a term (or type) can live in. It has an (ordered) list of names 
+bound to types. Later types can refer to earlier types in the list.
+
+The `lookup` field caches a quick way of getting the type from its name. There 
+are no name collisions allowed.
 """
 @struct_hash_equal struct TypeScope
   args::Vector{Pair{Symbol, AlgType}}
@@ -103,6 +123,15 @@ end
 
 TypeScope() = TypeScope(Pair{Symbol, AlgType}[], Pair{Symbol, AlgType}[])
 
+# Type/Term constructors
+#-----------------------
+
+abstract type TrmTypConstructor <: Judgment end
+
+argsof(t::TrmTypConstructor) = t.args
+localcontext(t::TrmTypConstructor) = t.localcontext
+
+signature(t::TrmTypConstructor) = AlgSort.(last.(localcontext(t)[argsof(t)]))
 
 @struct_hash_equal struct TypeConstructor <: TrmTypConstructor
   name::Symbol
@@ -127,8 +156,8 @@ end
 """
 `AlgAccessor`
 
-The arguments to a term constructor serve a dual function as both arguments and
-also methods to extract the value of those arguments.
+The arguments to a ttypeerm constructor serve a dual function as both arguments 
+and also methods to extract the value of those arguments.
 
 I.e., declaring `Hom(dom::Ob, codom::Ob)::TYPE` implicitly creates projection
 operations like `dom(h::Hom)::Ob`.
@@ -140,4 +169,3 @@ operations like `dom(h::Hom)::Ob`.
 end
 
 end # Module
-

@@ -1,3 +1,6 @@
+"""
+Code for parsing the @interface DSL
+"""
 module Parsing
 
 using MLStyle
@@ -5,8 +8,9 @@ using Markdown
 using ...MetaUtils: fqmn, fq_eval
 using ..Algorithms: rename
 using ..Interfaces, ..Algorithms, ..Syntax
+using ..InterfaceData: add_judgment!, add_alias!, allnames
 
-""" Parse markdown coming out of @doc programatically. """
+""" Parse markdown coming out of @doc programmatically. """
 mdp(::Nothing) = ""
 mdp(x::Markdown.MD) = x
 function mdp(x::Base.Docs.DocStr)
@@ -16,7 +20,8 @@ end
 unquote(s::Symbol) = s 
 unquote(s::QuoteNode) = s.value
 
-function parse_line!(theory::Interface, e::Expr, linenumber, current_module::Vector{Symbol})
+function parse_line!(theory::Interface, e::Expr, linenumber, 
+                     current_module::Vector{Symbol})
   try
     @match e begin
       Expr(:tuple, arg1, args...) => begin
@@ -46,13 +51,13 @@ function parse_line!(theory::Interface, e::Expr, linenumber, current_module::Vec
               @case (_::LineNumberNode)
                 nothing
               @case :($alias := $name)
-                # check if there is already a declaration for name, if not, create declaration
-                alias ∈ Interfaces.allnames(theory) && error(
+                # check if already a declaration for name, if not, create decl
+                alias ∈ allnames(theory) && error(
                   "Cannot declare alias $alias for $name: $alias already exists")
-                name ∈ Interfaces.allnames(theory) || error(
+                name ∈ allnames(theory) || error(
                   "Cannot declare alias $alias for $name: $name doesn't exist")
 
-                Interfaces.add_alias!(theory, alias, name)
+                add_alias!(theory, alias, name)
               @case _
                 error("could not match @op expression $line")
             end
@@ -99,8 +104,10 @@ function parse_binding_line!(theory::Interface, e, linenumber)::Int
       end
       _ => parsefunction!(theory, localcontext, type_expr, name, equation)
     end
-    Expr(:call, :(==), t1, t2) => parseaxiom!(theory, localcontext, type_expr, [t1,t2])
-    Expr(:comparison, args...) => parseaxiom!(theory, localcontext, type_expr, args[1:2:end])
+    Expr(:call, :(==), t1, t2) => 
+      parseaxiom!(theory, localcontext, type_expr, [t1,t2])
+    Expr(:comparison, args...) => 
+      parseaxiom!(theory, localcontext, type_expr, args[1:2:end])
     _ => parseconstructor!(theory, localcontext, type_expr, head)
   end
 end
@@ -113,13 +120,13 @@ function parseconstructor!(theory::Interface, localcontext, type_expr, e)::Int
   end
   args = parseargs!(theory, arglist, localcontext)
   @match type_expr begin
-    :TYPE => Interfaces.add_judgment!(theory, TypeConstructor(name, localcontext, args))
+    :TYPE => add_judgment!(theory, TypeConstructor(name, localcontext, args))
     _ => begin
       type = @match type_expr begin 
         Expr(:vect, _...) => fromexpr(theory, localcontext, type_expr, TypeScope)
         _ => parsetype(theory, localcontext, type_expr)
       end
-      Interfaces.add_judgment!(theory, TermConstructor(name, localcontext, args, type))
+      add_judgment!(theory, TermConstructor(name, localcontext, args, type))
     end
   end
 end
@@ -164,7 +171,7 @@ end
 
 function parse_methodapp(theory, scope, fun::Symbol, argexprs)
   args = Vector{AlgTerm}(parseterm.(Ref(theory), Ref(scope), argexprs))
-  MethodApp{AlgTerm}(get(theory.aliases, fun, fun), args)
+  MethodApp(get(theory.aliases, fun, fun), args)
 end
 
 function parse_binding(theory, scope, e)
@@ -190,14 +197,14 @@ function parseterm(theory::Interface, localcontext, e)
       value = localcontext[s]
       AlgTerm(s)
     end
-    Expr(:call, head::Symbol, argexprs...) => AlgTerm(parse_methodapp(theory, localcontext, head, argexprs))
-    Expr(:(::), val, type) => AlgTerm(Constant(val, fromexpr(theory, localcontext, type, AlgType)))
+    Expr(:call, head::Symbol, argexprs...) => 
+      AlgTerm(parse_methodapp(theory, localcontext, head, argexprs))
+    Expr(:(::), val, type) => 
+      AlgTerm(Constant(val, fromexpr(theory, localcontext, type, AlgType)))
     e::Expr => error("could not parse AlgTerm from $e")
     _ => error("Cannot parse $e")
   end
 end
-
-
 
 function parseaxiom!(theory::Interface, localcontext, sort_expr, terms; name=nothing)
   equands = parseterm.(Ref(theory), Ref(localcontext), terms)
@@ -209,7 +216,7 @@ function parseaxiom!(theory::Interface, localcontext, sort_expr, terms; name=not
     fromexpr(c, sort_expr, AlgSort)
   end
   ax = AlgAxiom(name, localcontext, sort, equands)
-  Interfaces.add_judgment!(theory, ax)
+  add_judgment!(theory, ax)
 end
 
 
@@ -237,6 +244,5 @@ function normalize_judgment(e)
     _ => e
   end
 end
-
 
 end # module

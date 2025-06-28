@@ -1,0 +1,4 @@
+build/
+site/
+src/generated
+.DS_Store
