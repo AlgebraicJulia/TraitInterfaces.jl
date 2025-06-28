@@ -15,6 +15,9 @@ using MLStyle: @match
 
 const Expr0 = Union{Symbol,Expr}
 
+"""
+An explicit representation of the data of a Julia method
+"""
 @struct_hash_equal struct JuliaFunction
   name::Expr0
   args::Vector{Expr0}
@@ -47,6 +50,7 @@ has_empty_arg_type(fun::JuliaFunction) = any(parse_function_sig(fun).types) do x
   x == :(Union{})
 end
 
+""" Just the type signature of a method """
 @struct_hash_equal struct JuliaFunctionSig
   name::Expr0
   types::Vector{Expr0}
@@ -56,16 +60,6 @@ end
     new(name, types, whereparams)
   end
 end
-
-"""For comparing JuliaFunctionSigs modulo the where parameters"""
-@struct_hash_equal struct JuliaFunctionSigNoWhere 
-  name::Expr0
-  types::Vector{Expr0}
-end
-JuliaFunctionSigNoWhere(f::JuliaFunctionSig) =
-  JuliaFunctionSigNoWhere(f.name, f.types)
-
-JuliaFunctionSig(f::JuliaFunctionSigNoWhere) = JuliaFunctionSig(f.name, f.types)
 
 # Parsing Julia functions
 #########################
@@ -179,17 +173,6 @@ end
 # Operations on Julia expressions
 #################################
 
-""" Concatenate two Julia expressions into a block expression.
-"""
-function concat_expr(expr1::Expr, expr2::Expr)::Expr
-  @match (expr1, expr2) begin
-    (Expr(:block, a1...), Expr(:block, a2...)) => Expr(:block, a1..., a2...)
-    (Expr(:block, a1...), _) => Expr(:block, a1..., expr2)
-    (_, Expr(:block, a2...)) => Expr(:block, expr1, a2...)
-    _ => Expr(:block, expr1, expr2)
-  end
-end
-
 """ Remove all LineNumberNodes from a Julia expression.
 """
 function strip_lines(expr::Expr; recurse::Bool=false)::Expr
@@ -211,6 +194,10 @@ function fqmn(mod::Module)
   reverse(names)
 end
 
+""" 
+Evaluate an expression `A.B.C.Foo` by calling `eval` on `A` and then
+iteratively calling `getproperty`
+"""
 fq_eval(v::Vector{Symbol}) = foldl(getproperty, [eval(first(v)), v[2:end]...])
 
 end # module

@@ -45,7 +45,7 @@ end
 @test noise[joe]() == "baaaaah?"
 ```
 
-We could have modeled this another way, using an *abstract type* in our interface to represent the animal. Implementers of the interface must supply a Julia type for these abstract types in addition to the supplying methods for the abstract operations.
+We could have modeled this another way, using an *abstract type* (to be distinguished from Julia's built in notion of `abstract type`) in our interface to represent the animal. Implementers of the interface must supply a Julia type for these abstract types in addition to the supplying methods for the abstract operations.
 
 ```julia
 @interface AnimalInterface′ begin

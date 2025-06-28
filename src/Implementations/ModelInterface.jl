@@ -1,4 +1,3 @@
-
 """
 Any Julia value can be a trait which implements an interface, `I`. A trait 
 `t::T` is considered to be implementing `I` iff, for all operations in `I`
@@ -8,14 +7,13 @@ Also for each sort `s`, we need `hasmethod(impl_type, (M, I.s) == true`.
 """
 module ModelInterface
 
-export implements, impl_type, impl_types, MissingMethodImplementation,
-       @instance, @withmodel
+export MissingMethodImplementation, @instance, @withmodel
 
 using MLStyle
 using DataStructures: DefaultDict, OrderedDict
 
 using ...MetaUtils, ...Interfaces
-using ...MetaUtils: JuliaFunctionSigNoWhere, fq_eval
+using ...MetaUtils: fq_eval
 
 import ...Interfaces.InterfaceModules: InterfaceModules, impl_type, implements
 
@@ -40,82 +38,6 @@ function Base.showerror(io::IO, e::MissingMethodImplementation)
   end
 end
 
-"""
-Check whether a model implements a particular theory.
-
-If no types are provided, then we look up whether or not `impl_type` methods 
-exist for this model + theory. If not, we will get a MethodError and assume 
-that the model does not implement the theory. (WARNING: occasionally one has 
-a complex type, such as `foo(Int,String)` which itself leads to a MethodError, 
-and this can be confusing because it looks like the model doesn't implement
-the theory at all rather than just being an error in how it was implemented).
-
-Once types are provided, we can check whether the theory is implemented by 
-checking for each term constructor whether or not the model implements that
-(handled by a different `implements` method).
-"""
-function implements(m, theory_module::Module, types = nothing)
-  types = try 
-     isnothing(types) ? impl_types(m, theory_module) : types
-  catch e
-    e isa MethodError && return false
-    throw(e)
-  end
-  T = theory_module.Meta.theory
-  type_dict = Dict(zip(abstract_sorts(T), types))
-  return all(collect(T.ops)) do o 
-    j = T[o]
-    implements(m, theory_module, nameof(j), map(signature(j)) do arg 
-      haskey(type_dict, arg) && return type_dict[arg]
-      n = nameof(arg)
-      fq_eval([T.external[n]; n])
-    end)
-  end
-end 
-
-""" User-friendly access to checking if a model implements an operation.
-
-Throws an error if the name is overloaded. Anything programmatic should be 
-calling a method which accepts method `Ident`s rather than `Symbol`s.
-"""
-function implements(m::T, theory_mod::Module, name::Symbol, types=nothing) where T
-  isnothing(types) || return _implements(m, theory_mod, name, types)
-  theory = theory_mod.Meta.theory
-  N = length(lookup(theory, name).args)
-  !isempty(methods(getfield(theory_mod, name),
-                   (WithModel{T}, fill(Any, N)...)))
-end
-
-function _implements(::T, theory::Module, name::Symbol, types::Vector{<:Type}) where T
-  f = getfield(theory, name)
-  any(==(Union{}), types) && return true # no such methods (Julia 1.10 bug)
-  hasmethod(f, Tuple{WithModel{<:T}, types...})
-end
-
-""" 
-Machine-friendly access to checking if a model implements a particular
-operation. The `types` vector is in bijection with the AlgSorts of the
-*whole theory*. 
-"""  
-function implements(m, theory::Module, x::Symbol, args::Vector{<:Type}, types::Vector{<:Type})
-  tc = lookup(theory.Meta.theory, x, args)
-  name = nameof(getdecl(tc))
-  typedict = Dict(zip(sorts(theory.Meta.theory), types))
-  types′ = Type[typedict[AlgSort(getvalue(tc[i]))] for i in tc.args]
-  return _implements(m, theory, name, types′)
-end
-
-"""
-If `m` implements a GAT with a type constructor (identified by ident `id`), 
-mapped to a Julia type, this function returns that Julia type.
-"""
-function impl_types(m, T::Module)
-  Th = T.Meta.theory
-  map(filter(s->!haskey(Th.external, s), nameof.(sorts(Th)))) do s 
-    t = impl_type(m, getproperty(T, s)) 
-    t isa Type ? t : error("$s impl_type not a Type: $t")
-  end
-end 
 
 
 """
@@ -160,7 +82,6 @@ macro instance(head, model, body)
   # Get the model type that we are overloading for, or nothing if this is the
   # default instance for `instance_types`
   model_type, whereparams = parse_model_param(model)
-
 
   # Create the actual instance
   generate_instance(theory, theory_module, jltype_by_sort, model_type, whereparams, body)
@@ -232,9 +153,7 @@ function parse_model_param(e)
   (model_type, whereparams)
 end
 
-"""
-Parses the raw julia expression into JuliaFunctions
-"""
+""" Parses a raw julia block expression in @instance into JuliaFunctions """
 function parse_instance_body(expr::Expr)::Vector{JuliaFunction}
   @assert expr.head == :block
   Vector{JuliaFunction}(map(strip_lines(expr).args) do elem 
@@ -246,89 +165,28 @@ function args_from_sorts(sorts::Vector{AlgSort}, jltype_by_sort::Dict{AlgSort})
   Expr0[Expr(:(::), gensym(), jltype_by_sort[s]) for s in sorts]
 end
 
-# Changed to symbol
-function default_typecon_impl(X::Symbol, theory::Interface, jltype_by_sort::Dict{AlgSort})
-  typecon = getvalue(theory[X])
-  sort = AlgSort(getdecl(typecon), X)
-  jltype = jltype_by_sort[sort]
-  args = args_from_sorts([sort; sortsignature(typecon)], jltype_by_sort)
-  JuliaFunction(
-    name = nameof(getdecl(typecon)),
-    args = args,
-    return_type = jltype,
-    impl = :(return $(args[1].args[1])),
-  )
-end
-
-# Changed to symbol
-function default_accessor_impl(x::Symbol, theory::Interface, jltype_by_sort::Dict{AlgSort})
-  acc = getvalue(theory[x])
-  sort = AlgSort(acc.typecondecl, acc.typecon)
-  jltype = jltype_by_sort[sort]
-  errormsg = "$(acc) not defined for $(jltype)"
-  JuliaFunction(;
-    name = nameof(getdecl(acc)),
-    args = Expr0[Expr(:(::), jltype)],
-    impl = :(error($errormsg * " in model $model"))
-  )
-end
-
-# Changed to symbol
-julia_signature(theory::Interface, x::Symbol, jltype_by_sort::Dict{AlgSort}) = 
-  julia_signature(getvalue(theory[x]), jltype_by_sort; X=x)
-
-function julia_signature(
-  termcon::TermConstructor,
-  jltype_by_sort::Dict{AlgSort};
-  oldinstance=false, kw...
-)
-  sortsig = sortsignature(termcon)
-  args = if oldinstance && isempty(sortsig)
-    Expr0[Expr(:curly, :Type, jltype_by_sort[AlgSort(termcon.type)])]
-  else
-    Expr0[jltype_by_sort[sort] for sort in sortsig if !GATs.iseq(sort)]
-  end
-  JuliaFunctionSig(
-    nameof(getdecl(termcon)),
-    args
-  )
-end
-
-function julia_signature(
-  typecon::TypeConstructor,
-  jltype_by_sort::Dict{AlgSort};
-  X, kw...
-)
-  decl = getdecl(typecon)
-  sort = AlgSort(decl, X)
-  JuliaFunctionSig(
-    nameof(decl),
-    Expr0[jltype_by_sort[sort] for sort in [sort, sortsignature(typecon)...]]
-  )
-end
-
-function julia_signature(
-  acc::AlgAccessor,
-  jltype_by_sort::Dict{AlgSort};
-  kw...
-)
-  jlargtype = jltype_by_sort[AlgSort(acc.typecondecl, acc.typecon)]
-  JuliaFunctionSig(nameof(getdecl(acc)), [jlargtype])
-end
-
-
-function toexpr(sig::JuliaFunctionSig)
-  Expr(:call, sig.name, [Expr(:(::), type) for type in sig.types]...)
-end
-toexpr(sig::JuliaFunctionSigNoWhere) = 
-  toexpr(sig |> JuliaFunctionSig)
-
-
 """
-Add `WithModel` param first, if this is not an old instance.
-(it shouldn't have it already). Also qualify method name to be in theory module.
+Does some preprocessing on the user-written method:
+
+1. Add `WithModel` param first (it shouldn't have it already). 
+2. qualify method name to be in theory module.
+
+If an interface `ThCategory` with operation `id(x::Ob)::Hom` is implemented via:
+
+```
+@instance ThCategory{Ob=Foo, Hom=Bar} [model::Baz] begin 
+  id(x::Foo)::Bar = ...
+end
+```
+
+... then we syntactically modify this method to be:
+
+```
+ThCategory.id(model::WithModel{<:Bar}, x::Foo) = ...
+```
 """
-function qualify_function(fun::JuliaFunction, theory_module, model_type::Union{Expr0, Nothing}, whereparams)
+function qualify_function(fun::JuliaFunction, theory_module, 
+                          model_type::Union{Expr0, Nothing}, whereparams)
   (args, impl) = if !isnothing(model_type)
     args = map(fun.args) do arg
       @match arg begin
@@ -357,7 +215,21 @@ function qualify_function(fun::JuliaFunction, theory_module, model_type::Union{E
   )
 end
 
+"""
+Register the concrete Julia type associated with a given interface, type in that
+interface, and model which implements that type.
+
+E.g. if the interface `ThCategory` has a type `Ob` then 
+
+`@instance ThCategory{Ob=Foo, Hom=Bar} [model::Baz]` should generate the 
+following code:
+
+```
+impl_type(::Baz, ThCategory.Ob) = Foo
+```
+"""
 function impl_type_declaration(theory_module, model_type, whereparams, sort, jltype)
+  isnothing(model_type) && return :() # this only makes sense for explicit models
   methd = Expr(:., theory_module, QuoteNode(nameof(sort)))
   quote 
     if !hasmethod($(GlobalRef(ModelInterface, :impl_type)), 
@@ -368,7 +240,20 @@ function impl_type_declaration(theory_module, model_type, whereparams, sort, jlt
   end
 end
 
-""" Check if a method exists """ # x is a symbol, was an ident
+""" 
+Check that an instance properly implements some interface method.
+
+E.g. if the interface ThCategory has a method `compose(f::Hom, g::Hom)`
+
+then `@instance ThCategory{Ob=Foo, Hom=Bar} [model::Baz]` should generate the 
+following code, to throw an error if the body of the macro didn't provide a 
+method of the expected type:
+
+```
+hasmethod(ThCategory.compose, (WithModel{<:Baz}, Bar, Bar)) || throw(
+  MissingMethodImplementation(...))
+```
+"""
 function typecheck_runtime(theory_name, model_type, whereparams, tc, jltype)
   name = nameof(tc)
   wm = :($(GlobalRef(ModelInterface, :WithModel)){$model_type})

@@ -1,3 +1,5 @@
+include("Examples.jl")
+
 include("TestImplementations.jl")
 
 include("Renaming.jl")

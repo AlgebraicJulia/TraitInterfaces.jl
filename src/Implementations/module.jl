@@ -2,12 +2,12 @@ module Implementations
 
 using Reexport 
 
+include("Check.jl")
 include("ModelInterface.jl")
-include("Defaults.jl")
 include("SpecialModels.jl")
 
+@reexport using .Check
 @reexport using .ModelInterface
-@reexport using .Defaults
 @reexport using .SpecialModels
 
 end # module

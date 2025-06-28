@@ -47,6 +47,12 @@ end
 @test noise[trait](joe) == "baaaaah?"
 
 
+# "Default model" which is just type dispatch (as if we didn't write @instance)
+@instance Animal′{Species=Sheep} begin 
+  name(s::Sheep)::String = s.name
+  noise(s::Sheep)::String = s.naked ? "baaaaah?" : "baaaaah!"
+end
+
 # Disambiguating when the same type implements two interfaces which have 
 # (conflicting) methods with the same name.
 # https://doc.rust-lang.org/rust-by-example/trait/disambiguating.html

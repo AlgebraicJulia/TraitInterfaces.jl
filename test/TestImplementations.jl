@@ -4,10 +4,13 @@ using TraitInterfaces, Test, StructEquality, REPL, StaticArrays
 import LinearAlgebra
 
 # Helper functions
+##################
 
-get_doc_string(mod::Module, f) = string(Base.Docs.doc(Base.Docs.Binding(mod, Symbol(f))))
+get_doc_string(mod::Module, f) = 
+  string(Base.Docs.doc(Base.Docs.Binding(mod, Symbol(f))))
 
-test_doc_string(var::Symbol, starts::String) = startswith(get_doc_string(@__MODULE__, var), starts)
+test_doc_string(var::Symbol, starts::String) = 
+  startswith(get_doc_string(@__MODULE__, var), starts)
 
 # Example interface 
 ###################
@@ -80,12 +83,14 @@ wm = WithModel(FinSetC())
 # Note these will *not* throw exceptions once the Good Implementation code 
 # below is run.
 
-@test_throws MissingMethodImplementation @instance ThTest{Ob=Int, Hom=Vector{Int}} [model::FinSetC] begin
+@test_throws MissingMethodImplementation @instance ThTest{
+    Ob=Int, Hom=Vector{Int}} [model::FinSetC] begin
   compose(f::Vector{Int}, g::Vector{Int}) = g[f]
   dom(f::Vector{Int}) = length(f)
 end
 
-@test_throws MissingMethodImplementation @instance ThTest{Ob=Int, Hom=Matrix{T}} [model::MatC{T}] where T begin
+@test_throws MissingMethodImplementation @instance ThTest{
+    Ob=Int, Hom=Matrix{T}} [model::MatC{T}] where T begin
   id(n::Int) = Matrix{T}(LinearAlgebra.I,n,n)
 end
 

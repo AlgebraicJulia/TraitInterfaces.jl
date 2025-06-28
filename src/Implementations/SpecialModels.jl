@@ -3,8 +3,7 @@ export Dispatch, InitialModel, TerminalModel, InitialModel′, TerminalModel′
 
 using ...Interfaces
 using ...Interfaces.InterfaceModules: Dispatch, InitialModel′, TerminalModel′
-import ...Interfaces.InterfaceModules: implements, impl_type 
-import ..ModelInterface: _implements
+import ..Check: _implements, implements, impl_type
 
 
 # Public constants
