@@ -1,16 +1,16 @@
-""" The things that constitute an interface """
+""" The building blocks that make up an interface """
 module Syntax 
 
 export MethodApp, AlgSort, AlgTerm, AlgType, Judgment, TypeScope, Maybe,
-       TypeConstructor, TermConstructor, AlgAxiom, AlgAccessor, signature
+       TypeConstructor, TermConstructor, AlgAxiom, AlgAccessor, signature,
+       AlgFunction
 
 using StructEquality
 
 const Maybe{T} = Union{Nothing,T}
 
-#################################
-# Building blocks of interfaces #
-#################################
+# Types and terms
+#################
 
 """ Only subtyped by AlgTerm - need this to avoid a circular type definition """
 abstract type AbstractAlgTerm end
@@ -50,6 +50,8 @@ of an operation to some other terms.
   body::Union{Symbol, MethodApp}
 end
 
+Base.get(t::AlgTerm) = t.body
+
 function AlgTerm(fun::Symbol, args::Vector{AlgTerm})
   AlgTerm(MethodApp(fun, args))
 end
@@ -61,6 +63,8 @@ terms.
 @struct_hash_equal struct AlgType 
   body::MethodApp
 end
+
+Base.get(t::AlgType) = t.body
 
 """
 A type constructor, alternatively thought of as a (possibly-dependent) type 
@@ -126,9 +130,11 @@ TypeScope() = TypeScope(Pair{Symbol, AlgType}[], Pair{Symbol, AlgType}[])
 # Type/Term constructors
 #-----------------------
 
+# Either a TypeConstructor or a TermConstructor
 abstract type TrmTypConstructor <: Judgment end
 
 argsof(t::TrmTypConstructor) = t.args
+
 localcontext(t::TrmTypConstructor) = t.localcontext
 
 signature(t::TrmTypConstructor) = AlgSort.(last.(localcontext(t)[argsof(t)]))
@@ -156,10 +162,10 @@ end
 """
 `AlgAccessor`
 
-The arguments to a ttypeerm constructor serve a dual function as both arguments 
+The arguments to a type/term constructor serve a dual function as both arguments 
 and also methods to extract the value of those arguments.
 
-I.e., declaring `Hom(dom::Ob, codom::Ob)::TYPE` implicitly creates projection
+E.g. declaring `Hom(dom::Ob, codom::Ob)::TYPE` implicitly creates projection
 operations like `dom(h::Hom)::Ob`.
 """
 @struct_hash_equal struct AlgAccessor <: Judgment
@@ -167,5 +173,20 @@ operations like `dom(h::Hom)::Ob`.
   typecon::Symbol
   arg::Int
 end
+
+"""
+A term constructor which is purely derivative on other term constructors, 
+such as "square(x) := x * x" (where * is some other term constructor). One need
+not specify the implementation of such an operation when declaring an 
+implementation.
+"""
+@struct_hash_equal struct AlgFunction <: TrmTypConstructor
+  name::Symbol
+  localcontext::TypeScope
+  args::Vector{Int}
+  value::AlgTerm
+end
+
+Base.get(f::AlgFunction) = f.value
 
 end # Module

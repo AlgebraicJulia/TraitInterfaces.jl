@@ -1,3 +1,4 @@
+""" Defining the data structure which stores data of an interface """
 module InterfaceData
 
 export Interface, lookup, sorts, abstract_sorts, signature
@@ -15,7 +16,7 @@ methods for any abstract types and operations in the theory.
 
 We can ascribe aliases to various types or operations.
 
-Operations can be overloaded, meaning we can distinguish operations that have 
+Operations can be *overloaded*, meaning we can distinguish operations that have 
 the same name if they have different type signatures. This should be used with 
 caution, as implementations of the interface which assign the same concrete type 
 to distinct abstract types can then cause method ambiguities.
@@ -44,7 +45,14 @@ function Interface(s::Symbol)
             Set{Int}(), Set{Int}(), Set{Int}(), Set{Int}(), lookup)
 end
 
-""" `sorts` not required unless there is overloading """
+# Data access
+#############
+
+""" 
+From a name, get a type or an operation.
+
+`sorts` not required unless there is overloading 
+"""
 function lookup(i::Interface, s::Symbol, sorts::Maybe{Vector{AlgSort}}=nothing)
   d = i.lookup[s]
   
@@ -68,9 +76,18 @@ Base.copy(f::Interface) = Interface(f.name, deepcopy(f.judgments),
 
 Base.length(f::Interface) = length(f.judgments)
 
-function Base.in(x::Judgment, f::Interface)
-  x ∈ f.judgments
-end
+Base.in(x::Judgment, f::Interface) = x ∈ f.judgments
+
+""" All type/term constructors as well as accessors """
+allnames(f::Interface) = nameof.(filter(x->!(x isa AlgAxiom), f.judgments))
+
+sorts(f::Interface) = AlgSort.(nameof.(f[sort(collect(f.types))]))
+
+abstract_sorts(Th::Interface) = 
+  filter(s->!haskey(Th.external, nameof(s)), sorts(Th))
+
+# Mutating 
+###########
 
 function Base.union!(I::Interface, J::Interface)
   for j in J.judgments
@@ -82,16 +99,6 @@ function Base.union!(I::Interface, J::Interface)
   I
 end
 
-
-allnames(f::Interface) = nameof.(filter(x->!(x isa AlgAxiom), f.judgments))
-
-sorts(f::Interface) = AlgSort.(nameof.(f[sort(collect(f.types))]))
-
-abstract_sorts(Th::Interface) = 
-  filter(s->!haskey(Th.external, nameof(s)), sorts(Th))
-
-# mutating 
-###########
 function add_alias!(i::Interface, alias::Symbol, name::Symbol)
   if haskey(i.aliases, alias)
     i.aliases[alias] == name || error("Cannot add conflicting alias $alias => \
@@ -124,6 +131,12 @@ function _add_judgment!(i::Interface, c::TypeConstructor, n::Int)
 end
 
 function _add_judgment!(i::Interface, c::TermConstructor, n::Int)
+  push!(i.ops, n)
+  c_args = c.localcontext[c.args]
+  add_lookup!(i, c.name, AlgSort.(last.(c_args)), n)
+end
+
+function _add_judgment!(i::Interface, c::AlgFunction, n::Int)
   push!(i.ops, n)
   c_args = c.localcontext[c.args]
   add_lookup!(i, c.name, AlgSort.(last.(c_args)), n)

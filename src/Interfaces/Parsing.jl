@@ -157,7 +157,7 @@ function parseargs!(theory::Interface, exprs::AbstractVector, scope::TypeScope)
   linenumber = nothing
   Vector{Int}(filter(x->x isa Int, map(exprs) do expr
     binding_expr = @match expr begin
-      a::Symbol => getlid(ident(scope; name=a))
+      a::Symbol => findfirst(==(a), first.(scope.args))
       l::LineNumberNode => begin linenumber = l end
       :($a :: $T) => begin
         binding = parse_binding(theory, scope, expr)
@@ -219,6 +219,16 @@ function parseaxiom!(theory::Interface, localcontext, sort_expr, terms; name=not
   add_judgment!(theory, ax)
 end
 
+function  parsefunction!(theory::Interface, localcontext, sort_expr, call, e)
+  isnothing(sort_expr) || error("No explicit sort for functions $call :: $sort_expr")
+  name, args′ = @match call begin
+    Expr(:call, name, args...) => (name, args)
+  end
+  args = parseargs!(theory, args′, localcontext)
+  trm = parseterm(theory, localcontext, e)
+  fun = AlgFunction(name, localcontext, args, trm)
+  add_judgment!(theory, fun)
+end
 
 """
 This is necessary because the intuitive precedence rules for the symbols that we

@@ -14,9 +14,13 @@ using DataStructures: DefaultDict, OrderedDict
 
 using ...MetaUtils, ...Interfaces
 using ...MetaUtils: fq_eval
+import ...MetaUtils: JuliaFunction
+using ...Interfaces.Algorithms: sortcheck
 
 import ...Interfaces.InterfaceModules: InterfaceModules, impl_type, implements
 
+# Custom errors 
+###############
 """
 An error to throw when an implementation of an interface fails to implement a 
 particular method
@@ -38,7 +42,34 @@ function Base.showerror(io::IO, e::MissingMethodImplementation)
   end
 end
 
+# Fixed recipes for implementations of AlgFunctions
+###################################################
 
+function alg_function(theory_module::Expr0, I::Interface, f::AlgFunction,   
+                      jltype_by_sort::Dict, whereparams)
+  argnames = OrderedDict(map(f.args) do i 
+    sym, _ = f.localcontext[i]
+    sym => gensym(sym)
+  end)
+  args = map(zip(f.args, argnames)) do (i, (_, argname))
+    ty = jltype_by_sort[AlgSort(f.localcontext[i][2])]
+    Expr(:(::), argname, ty)
+  end
+  ret = jltype_by_sort[sortcheck(I, f.localcontext, get(f))]
+  body = term_to_expr(get(f), theory_module, argnames)
+  JuliaFunction(nameof(f), args, Expr0[], whereparams, ret, body)
+end
+
+term_to_expr(t::AlgTerm, mod, argnames) = term_to_expr(get(t), mod, argnames)
+
+term_to_expr(t::Symbol, _, argnames) = argnames[t]
+
+term_to_expr(m::MethodApp, mod, argnames) = :($(mod).$(m.method)[model](  
+  $(term_to_expr.(m.args, Ref(mod), Ref(argnames))...)))
+
+
+# Declaring implementations of interfaces
+#########################################
 
 """
 Usage: (TODO)
@@ -90,7 +121,7 @@ end
 
 function generate_instance(
   theory::Interface,
-  theory_module::Union{Expr0, Module},
+  theory_module::Expr0,
   jltype_by_sort::Dict{AlgSort},
   model_type::Union{Expr0, Nothing},
   whereparams::AbstractVector,
@@ -101,13 +132,16 @@ function generate_instance(
   # Parse the body into functions defined here and functions defined elsewhere
   typechecked_functions = parse_instance_body(body)
 
-  qualified_functions = []
-  for f in typechecked_functions
+  fixed_functions = map(filter(j -> j isa AlgFunction, theory.judgments)) do j 
+    alg_function(theory_module, theory, j, jltype_by_sort, whereparams)
+  end
+
+  qualified_functions = map(typechecked_functions ∪ fixed_functions) do f 
     f_name = nameof(f) 
     tc = lookup(theory, f_name)  # args for overloaded names?
-    tc isa TermConstructor || tc isa AlgAccessor || error("Only implement operations, not $tc")
-    qf = qualify_function(f, theory_module, model_type, whereparams)
-    push!(qualified_functions, qf)
+    tc isa TermConstructor || tc isa AlgAccessor || tc isa AlgFunction || error(
+      "Only implement operations, not $tc")
+    qualify_function(f, theory_module, model_type, whereparams)
   end
 
   impl_type_declarations = []

@@ -158,4 +158,21 @@ x = TestTypedWrapper(MatC{Int}())
 @test x isa TestTypedWrapper{Int, Matrix{Int}}
 
 
+# Fixed methods
+###############
+
+@interface ThSquare <: ThTest begin
+  square(f) := f⋅f ⊣ [a::Ob, f::Hom(a,a)]
+end
+
+# Nothing more is needed
+@instance ThSquare{Ob=Int, Hom=SVector} [model::FinSetC] begin end
+
+@test implements(FinSetC(), ThSquare)
+
+@withmodel FinSetC() (⋅, id, square) begin
+  s21, s12 = SVector{2}.([[2,1],[1,2]])
+  @test square(s21) == s12 == id(2)
+end
+
 end # module

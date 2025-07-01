@@ -210,6 +210,25 @@ end
 @test ThRing.times[ℤm3](2, 2) == 1
 ```
 
+We can give a name to a fixed composition of operations within a theory:
+
+```julia 
+@interface ThRingSquare <: ThRing begin
+  square(a::X) := a × a
+end
+```
+
+The implementation of such operations is automatically derived when creating an instance:
+
+```julia
+# nothing more to be done
+@instance ThRingSquare{Int} [model::Modulo] begin end
+
+@test implements(ℤm3, ThRingSquare)
+
+@test square[ℤm3](2) == 1
+```
+
 ## Dependent types: wiring diagram example 
 
 One may have types for wires, ports,

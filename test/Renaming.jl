@@ -75,4 +75,27 @@ end
 @test ThRing.plus[ℤm3](2,2) == 1
 @test ThRing.times[ℤm3](2,2) == 1
 
+module RingSquareModule
+  export ThRingSquare
+  using TraitInterfaces
+  using ..ThRing
+  using .ThRing
+  import .ThRing: X, zero, plus, minus, one, times
+
+  @interface ThRingSquare <: ThRing begin
+    square(a::X) := a × a
+    @op (⁺²) := square
+  end
+end
+
+using .RingSquareModule: ThRingSquare
+using .ThRingSquare: square
+
+# nothing more to be done
+@instance ThRingSquare{Int} [model::Modulo] begin end
+
+@test implements(ℤm3, ThRingSquare)
+
+@test square[ℤm3](2) == 1
+
 end # module

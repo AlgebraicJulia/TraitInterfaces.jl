@@ -103,7 +103,7 @@ function theory_impl(head, body, __module__)
   newnames = Symbol[]
   for judgment in theory.judgments
     bname = nameof(judgment)
-    if judgment isa TermConstructor || judgment isa AlgAccessor
+    if judgment isa TermConstructor || judgment isa AlgAccessor || judgment isa AlgFunction
       push!(lines, juliadeclaration(bname))
       push!(newnames, bname)
     elseif judgment isa TypeConstructor 
@@ -178,19 +178,35 @@ end
 function juliadeclaration(name::Symbol)
   funname = gensym(name)
   quote
+
     function $name end
+
     # we expect just one method because of Dispatch type
     if isempty(Base.methods(Base.getindex, [typeof($name), Any]))
-      Base.getindex(f::typeof($name), ::$(GlobalRef(InterfaceModules, :Dispatch))) = f
-      $name(::$(GlobalRef(InterfaceModules, :WithModel)){$(GlobalRef(InterfaceModules, :Dispatch))}, args...) = $name(args...)
-      Base.getindex(f::typeof($name), ::$(GlobalRef(InterfaceModules, :InitialModel′))) = (x...;kw...)->error("Cannot call")
-      Base.getindex(f::typeof($name), ::$(GlobalRef(InterfaceModules, :TerminalModel′))) = (x...;kw...)->nothing
+
+      Base.getindex(f::typeof($name), 
+                    ::$(GlobalRef(InterfaceModules, :Dispatch))
+                   ) = f
+
+      $name(::$(GlobalRef(InterfaceModules, :WithModel)
+               ){$(GlobalRef(InterfaceModules, :Dispatch))}, 
+            args...
+           ) = $name(args...)
+
+      Base.getindex(f::typeof($name), 
+                    ::$(GlobalRef(InterfaceModules, :InitialModel′))
+                   ) = (x...;kw...) -> error("Cannot be called")
+
+      Base.getindex(f::typeof($name), 
+                    ::$(GlobalRef(InterfaceModules, :TerminalModel′))
+                   ) = (x...;kw...) -> nothing
 
       function Base.getindex(::typeof($name), m::Any)
         function $funname(args...) 
           $name($(GlobalRef(InterfaceModules, :WithModel))(m), args...)
         end
       end
+
     end
   end
 end
@@ -199,6 +215,11 @@ end
 # Wrapper type #
 ################
 
+"""
+Given an interface module, take a name (and an abstract type, optionally) and
+construct a type with that name which plays the role of wrapping a model of the
+interface.
+"""
 function wrapper(name::Symbol, t::Interface, mod)
   use = Expr(:using, Expr(:., :., :., name))
   quote

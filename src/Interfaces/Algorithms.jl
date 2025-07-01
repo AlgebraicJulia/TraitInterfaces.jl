@@ -68,11 +68,9 @@ function rename(j::MethodApp, names::Dict{Symbol, Symbol})
   MethodApp(get(names, j.method, j.method), rename.(j.args, Ref(names)))
 end
 
-
 function rename(j::TypeScope, names::Dict{Symbol, Symbol})
   TypeScope([n => rename(a, names) for (n,a) in j.args], 
             [n => rename(a, names) for (n,a) in j.kwargs])
 end
-
 
 end # module

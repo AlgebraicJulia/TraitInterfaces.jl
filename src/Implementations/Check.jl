@@ -49,7 +49,7 @@ Throws an error if the name is overloaded. Anything programmatic should be
 calling a method which accepts method `Ident`s rather than `Symbol`s.
 """
 function implements(m::T, theory_mod::Module, name::Symbol, types=nothing) where T
-  isnothing(types) || return _implements(m, theory_mod, name, types)
+  isnothing(types) || return _implements(m, theory_mod, name, Vector{Type}(types))
   theory = theory_mod.Meta.theory
   N = length(lookup(theory, name).args)
   !isempty(methods(getfield(theory_mod, name),
