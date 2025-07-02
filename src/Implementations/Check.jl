@@ -53,13 +53,13 @@ function implements(m::T, theory_mod::Module, name::Symbol, types=nothing) where
   theory = theory_mod.Meta.theory
   N = length(lookup(theory, name).args)
   !isempty(methods(getfield(theory_mod, name),
-                   (WithModel{T}, fill(Any, N)...)))
+                   (Trait{T}, fill(Any, N)...)))
 end
 
 function _implements(::T, theory::Module, name::Symbol, types::Vector{<:Type}) where T
   f = getfield(theory, name)
   any(==(Union{}), types) && return true # no such methods (Julia 1.10 bug)
-  hasmethod(f, Tuple{WithModel{<:T}, types...})
+  hasmethod(f, Tuple{Trait{<:T}, types...})
 end
 
 """ 

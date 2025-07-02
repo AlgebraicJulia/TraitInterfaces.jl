@@ -1,7 +1,7 @@
 """
 Any Julia value can be a trait which implements an interface, `I`. A trait 
 `t::T` is considered to be implementing `I` iff, for all operations in `I`
-`f(::A,::B,...)`, we have `hasmethod(f, (WithModel{M}, A, B)) == true`. 
+`f(::A,::B,...)`, we have `hasmethod(f, (Trait{M}, A, B)) == true`. 
 
 Also for each sort `s`, we need `hasmethod(impl_type, (M, I.s) == true`.
 """
@@ -202,7 +202,7 @@ end
 """
 Does some preprocessing on the user-written method:
 
-1. Add `WithModel` param first (it shouldn't have it already). 
+1. Add `Trait` param first (it shouldn't have it already). 
 2. qualify method name to be in theory module.
 
 If an interface `ThCategory` with operation `id(x::Ob)::Hom` is implemented via:
@@ -216,7 +216,7 @@ end
 ... then we syntactically modify this method to be:
 
 ```
-ThCategory.id(model::WithModel{<:Bar}, x::Foo) = ...
+ThCategory.id(model::Trait{<:Bar}, x::Foo) = ...
 ```
 """
 function qualify_function(fun::JuliaFunction, theory_module, 
@@ -231,8 +231,8 @@ function qualify_function(fun::JuliaFunction, theory_module,
 
     m = gensym(:m)
     (
-      [Expr(:(::), m, Expr(:curly, InterfaceModules.WithModel, Expr(:<:, model_type))), args...],
-      Expr(:let, Expr(:(=), :model, :($m.model)), fun.impl)
+      [Expr(:(::), m, Expr(:curly, InterfaceModules.Trait, Expr(:<:, model_type))), args...],
+      Expr(:let, Expr(:(=), :model, :($m.value)), fun.impl)
     )
   else
     (fun.args, Expr(:let, Expr(:(=), :model, nothing), fun.impl))
@@ -284,13 +284,13 @@ following code, to throw an error if the body of the macro didn't provide a
 method of the expected type:
 
 ```
-hasmethod(ThCategory.compose, (WithModel{<:Baz}, Bar, Bar)) || throw(
+hasmethod(ThCategory.compose, (Trait{<:Baz}, Bar, Bar)) || throw(
   MissingMethodImplementation(...))
 ```
 """
 function typecheck_runtime(theory_name, model_type, whereparams, tc, jltype)
   name = nameof(tc)
-  wm = :($(GlobalRef(ModelInterface, :WithModel)){$model_type})
+  wm = :($(GlobalRef(ModelInterface, :Trait)){$model_type})
   jltypes = [jltype[AlgSort(tc.localcontext[i][2])] for i in tc.args]
 
   # For default models, nullary constructors are handled funnily
@@ -310,7 +310,7 @@ function typecheck_runtime(theory_name, model_type, whereparams, tc, jltype)
 end
 
 """
-Automatically add `WithModel` trait parameter to some specified methods in a 
+Automatically add `Trait` trait parameter to some specified methods in a 
 code block.
 """
 macro withmodel(model, subsexpr, body)
@@ -339,7 +339,7 @@ macro withmodel(model, subsexpr, body)
 
   esc(
     Expr(:let,
-      Expr(:block, :($modelvar = $(Expr(:call, InterfaceModules.WithModel, model))), subvardefs...),
+      Expr(:block, :($modelvar = $(Expr(:call, InterfaceModules.Trait, model))), subvardefs...),
       Expr(:let,
         Expr(:block, subdefs...),
         body

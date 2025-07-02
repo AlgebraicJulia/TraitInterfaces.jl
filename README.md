@@ -67,7 +67,7 @@ Below we see the `{...}` syntax for assigning Julia types to the abstract type o
   noise(s::Sheep)::String = s.naked ? "baaaaah?" : "baaaaah!"
 end
 
-@test name[trait](joe) == "Joe" # equivalent to name(WithModel(trait), joe)
+@test name[trait](joe) == "Joe" # equivalent to name(Trait(trait), joe)
 @test noise[trait](joe) == "baaaaah?"
 ```
 
@@ -221,8 +221,9 @@ end
 The implementation of such operations is automatically derived when creating an instance:
 
 ```julia
-# nothing more to be done
-@instance ThRingSquare{Int} [model::Modulo] begin end
+@instance ThRingSquare{Int} [model::Modulo] begin
+  # nothing extra is needed to implement square
+end
 
 @test implements(ℤm3, ThRingSquare)
 

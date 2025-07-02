@@ -1,5 +1,5 @@
 module InterfaceModules
-export @interface, @theory, WithModel, Dispatch
+export @interface, @theory, Trait, Dispatch
 
 
 using StructEquality
@@ -14,21 +14,21 @@ function impl_type end # to be defined in ModelInterface
 function implements end # to be defined in ModelInterface
 
 """
-`WithModel` is a wrapper around a Julia value in order to signify it is being 
+`Trait` is a wrapper around a Julia value in order to signify it is being 
 treated as a trait, i.e. a Holy trait, to be used as the first parameter in 
 order to control dispatch.
 """
-@struct_hash_equal struct WithModel{M}
-  model::M
+@struct_hash_equal struct Trait{M}
+  value::M
 end
 
-Base.get(w::WithModel) = w.model
+Base.get(w::Trait) = w.value
 
 # TODO actually use this
-construct(::WithModel, A, args...) = A(args...) # default construct
+construct(::Trait, A, args...) = A(args...) # default construct
 
 function Base.getindex(::typeof(construct), m::Any)
-  cons(A,args...) = construct(WithModel(m), A, args...)
+  cons(A,args...) = construct(Trait(m), A, args...)
 end
 
 
@@ -188,7 +188,7 @@ function juliadeclaration(name::Symbol)
                     ::$(GlobalRef(InterfaceModules, :Dispatch))
                    ) = f
 
-      $name(::$(GlobalRef(InterfaceModules, :WithModel)
+      $name(::$(GlobalRef(InterfaceModules, :Trait)
                ){$(GlobalRef(InterfaceModules, :Dispatch))}, 
             args...
            ) = $name(args...)
@@ -203,7 +203,7 @@ function juliadeclaration(name::Symbol)
 
       function Base.getindex(::typeof($name), m::Any)
         function $funname(args...) 
-          $name($(GlobalRef(InterfaceModules, :WithModel))(m), args...)
+          $name($(GlobalRef(InterfaceModules, :Trait))(m), args...)
         end
       end
 
@@ -277,7 +277,7 @@ function wrapper(name::Symbol, t::Interface, mod)
           j = $(t)[i]
           op = nameof(j)
           :(@inline function $($(name)).$op(x::$(($(:n))), args...; kw...) 
-              $($(name)).$op(WithModel(x.val), args...; kw...)
+              $($(name)).$op(Trait(x.val), args...; kw...)
           end)
       end...)
 
@@ -342,7 +342,7 @@ function wrapper(name::Symbol, t::Interface, mod)
           j = $(t)[i]
           op = nameof(j)
           :(@inline function $($(name)).$op(x::$(($(:n))), args...; kw...) 
-              $($(name)).$op(WithModel(x.val), args...; kw...)
+              $($(name)).$op(Trait(x.val), args...; kw...)
           end)
         end)
       nothing

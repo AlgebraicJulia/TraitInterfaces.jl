@@ -72,8 +72,8 @@ ThTest.Meta.@typed_wrapper TestTypedWrapper
 
 @struct_hash_equal struct MatC{T<:Number} end
 
-wm = WithModel(FinSetC())
-@test wm isa WithModel{FinSetC}
+wm = Trait(FinSetC())
+@test wm isa Trait{FinSetC}
 @test get(wm) == FinSetC()
 
 
@@ -116,8 +116,8 @@ end
 
 @test test_doc_string(:id, "The identity vector on n is [1, ..., n]")
 
-# Calling implementation methods with explicit WithModel holy trait.
-@test ThTest.id(WithModel(FinSetC()), 2) == SVector{2}([1,2])
+# Calling implementation methods with explicit Trait holy trait.
+@test ThTest.id(Trait(FinSetC()), 2) == SVector{2}([1,2])
 
 # Indirectly doing the above with index notation
 @test ThTest.one[FinSetC()](SpecialType()) == 1
