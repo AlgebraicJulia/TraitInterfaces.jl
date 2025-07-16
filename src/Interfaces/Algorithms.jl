@@ -2,6 +2,8 @@ module Algorithms
 
 export sortcheck, rename
 
+using MLStyle
+
 using ..Interfaces, ..Syntax
 using ..InterfaceData: add_judgment!, add_alias!
 
@@ -10,14 +12,14 @@ Throw an error if a the head of an AlgTerm (which refers to a term constructor)
 has arguments of the wrong sort. Returns the sort of the term.
 """
 function sortcheck(theory::Interface, ctx::TypeScope, t::AlgTerm)::AlgSort
-  if t.body isa MethodApp
-    argsorts = sortcheck.(Ref(theory), Ref(ctx), t.body.args)
-    m = t.body.method
+  if t isa TermApp 
+    argsorts = sortcheck.(Ref(theory), Ref(ctx), t.args)
+    m = t.method
     judgment = lookup(theory, get(theory.aliases, m, m), argsorts)
     judgment isa TermConstructor || error("Bad judgment $t \n$judgment")
     AlgSort(judgment.type)
-  else
-    AlgSort(ctx[t.body])
+  elseif t isa TermVar 
+    AlgSort(ctx[get(t)])
   end
 end
 
@@ -47,7 +49,7 @@ function rename(j::AlgAxiom, names::Dict{Symbol, Symbol})
 end
 
 function rename(j::TypeConstructor, names::Dict{Symbol, Symbol})
-  TypeConstructor(get(names, j.name, j.name), rename(j.localcontext, names), j.args)
+  TypeConstructor(get(names, j.name, j.name), rename(j.localcontext, names), j.args, rename.(j.typeargs, Ref(names)))
 end
 
 function rename(j::TermConstructor, names::Dict{Symbol, Symbol})
@@ -55,18 +57,24 @@ function rename(j::TermConstructor, names::Dict{Symbol, Symbol})
 end
 
 function rename(j::AlgSort, names::Dict{Symbol, Symbol})
-  AlgSort(get(names, j.method, j.method))
+  AlgSort(get(names, j.method, j.method), j.vararg)
 end
 
-function rename(j::T, names::Dict{Symbol, Symbol}) where {T<:Union{AlgTerm, AlgType}}
-  T(rename(j.body, names))
+rename(j::TermVar, ::Dict{Symbol, Symbol}) = j
+
+function rename(j::TermApp, names::Dict{Symbol, Symbol}) 
+  TermApp(get(names, j.method, j.method), rename.(j.args, Ref(names)))
 end
+
+function rename(j::TypeApp, names::Dict{Symbol, Symbol})
+  TypeApp(get(names, j.method, j.method), rename.(j.args, Ref(names)),
+          rename.(j.params, Ref(names)))
+end
+
+rename(j::VarArgType, names::Dict{Symbol, Symbol}) = 
+  VarArgType(rename(get(j), names))
 
 rename(s::Symbol, names::Dict{Symbol,Symbol}) = get(names, s, s)
-
-function rename(j::MethodApp, names::Dict{Symbol, Symbol})
-  MethodApp(get(names, j.method, j.method), rename.(j.args, Ref(names)))
-end
 
 function rename(j::TypeScope, names::Dict{Symbol, Symbol})
   TypeScope([n => rename(a, names) for (n,a) in j.args], 

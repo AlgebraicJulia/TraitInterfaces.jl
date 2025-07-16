@@ -1,7 +1,8 @@
 """ The building blocks that make up an interface """
 module Syntax 
 
-export MethodApp, AlgSort, AlgTerm, AlgType, Judgment, TypeScope, Maybe,
+export AlgSort, AlgTerm, TermApp, TermVar, AlgType, TypeApp, VarArgType, 
+       Judgment, TypeScope, Maybe,
        TypeConstructor, TermConstructor, AlgAxiom, AlgAccessor, signature,
        AlgFunction
 
@@ -12,24 +13,8 @@ const Maybe{T} = Union{Nothing,T}
 # Types and terms
 #################
 
-""" Only subtyped by AlgTerm - need this to avoid a circular type definition """
-abstract type AbstractAlgTerm end
-
-"""
-`MethodApp`
-
-An application of a method of a constructor to arguments. We need a type parameter
-`T` because `AlgTerm` hasn't been defined yet, but the only type used for `T` will
-in fact be `AlgTerm`.
-
-`method` is the name of a `TermConstructor`, a `TypeConstructor` or an
-`AlgAccessor`.
-"""
-@struct_hash_equal struct MethodApp
-  method::Symbol
-  args::Vector{AbstractAlgTerm}
-end
-
+""" Subtyped by TermVar or TermApp """
+abstract type AlgTerm end
 
 """
 `AlgSort`
@@ -38,7 +23,11 @@ A *sort*, which is essentially a type constructor without arguments
 """
 @struct_hash_equal struct AlgSort
   method::Symbol
+  vararg::Bool
+  AlgSort(m::Symbol, v::Bool=false) = new(m, v)
 end
+
+
 
 Base.nameof(s::AlgSort) = s.method
 
@@ -46,32 +35,48 @@ Base.nameof(s::AlgSort) = s.method
 A term, which is a variable name (Symbol) in some context or the application 
 of an operation to some other terms.
 """
-@struct_hash_equal struct AlgTerm <: AbstractAlgTerm
-  body::Union{Symbol, MethodApp}
+@struct_hash_equal struct TermApp <: AlgTerm
+  method::Symbol
+  args::Vector{AlgTerm}
 end
 
-Base.get(t::AlgTerm) = t.body
+@struct_hash_equal struct TermVar <: AlgTerm
+  var::Symbol
+end
+
+Base.get(t::TermVar) = t.var
 
 function AlgTerm(fun::Symbol, args::Vector{AlgTerm})
-  AlgTerm(MethodApp(fun, args))
+  TermApp(fun, args)
 end
+
+abstract type AlgType end 
 
 """
 A (possibly dependent) type, represented as a type constructor applied to some 
-terms.
+terms. The type can depend on some concrete data (terms) as well as some types.
 """
-@struct_hash_equal struct AlgType 
-  body::MethodApp
+@struct_hash_equal struct TypeApp <: AlgType 
+  method::Symbol
+  args::Vector{AlgTerm}
+  params::Vector{AlgType}
 end
 
-Base.get(t::AlgType) = t.body
+""" A type that is only allowed to be the last argument in a signature th """
+@struct_hash_equal struct VarArgType <: AlgType
+  val::TypeApp
+end
+
+Base.get(v::VarArgType) = v.val
+
+AlgSort(a::VarArgType) = AlgSort(a.val.method, true)
 
 """
 A type constructor, alternatively thought of as a (possibly-dependent) type 
 where we have forgotten the arguments it depends on. E.g. given a type 
 `Matrix{3,4}` for 3 × 4 matrices, the corresponding sort is `Matrix`.
 """
-AlgSort(a::AlgType) = AlgSort(a.body.method) # discard the top level arguments
+AlgSort(a::AlgType) = AlgSort(a.method, false) # discard the top level arguments
 
 #############
 # Judgments #
@@ -111,7 +116,7 @@ function Base.show(io::IO, s::TypeScope)
     join(io, ["$k=$v" for (k,v) in s.kwargs], ",")
   end
   print(io, "]")
-end 
+end
 
 Base.length(t::TypeScope) = length(t.args)
 
@@ -143,6 +148,7 @@ signature(t::TrmTypConstructor) = AlgSort.(last.(localcontext(t)[argsof(t)]))
   name::Symbol
   localcontext::TypeScope
   args::Vector{Int} # covering subset of the localcontext
+  typeargs::Vector{AlgType}
 end 
 
 @struct_hash_equal struct TermConstructor <: TrmTypConstructor

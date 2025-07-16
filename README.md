@@ -232,8 +232,7 @@ end
 
 ## Dependent types: wiring diagram example 
 
-One may have types for wires, ports,
-and boxes if one were designing an interface for wiring diagrams.
+One may have types for wires, ports, and boxes if one were designing an interface for wiring diagrams.
 
 ```
     ⌜--⌝--[]

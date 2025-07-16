@@ -64,7 +64,7 @@ term_to_expr(t::AlgTerm, mod, argnames) = term_to_expr(get(t), mod, argnames)
 
 term_to_expr(t::Symbol, _, argnames) = argnames[t]
 
-term_to_expr(m::MethodApp, mod, argnames) = :($(mod).$(m.method)[model](  
+term_to_expr(m::TermApp, mod, argnames) = :($(mod).$(m.method)[model](  
   $(term_to_expr.(m.args, Ref(mod), Ref(argnames))...)))
 
 
@@ -115,11 +115,48 @@ macro instance(head, model, body)
   model_type, whereparams = parse_model_param(model)
 
   # Create the actual instance
-  generate_instance(theory, theory_module, jltype_by_sort, model_type, whereparams, body)
+  generate_instance(__module__, theory, theory_module, jltype_by_sort, model_type, whereparams, body)
+end
+
+"""
+We need to look at the method *after* having forgotten the dependent types
+and still be able to tell what method was being implemented. Ambiguity can
+arise. Check there is only one possibility given the sorts provided.
+"""
+function get_judgment_runtime(instance_module,theory, f_name, args, jltype_by_sort, whereparams)
+  where_eval(x) = instance_module.eval(Expr(:where, x, whereparams...))
+  j_eval = Dict(k=>where_eval(v) for (k,v) in jltype_by_sort)
+  srt_poss = map(args) do argexp 
+    @match argexp begin 
+      Expr(:(::), _, jtype) => begin 
+        srts = []
+        T = where_eval(jtype)
+        for s in sorts(theory) 
+          if eval(j_eval[s]) == T
+            push!(srts, s)
+          elseif Vararg{j_eval[s]} == T 
+            push!(srts, AlgSort(nameof(s), true))
+          end
+        end
+        srts
+      end
+    end
+  end
+  combos = if isempty(srt_poss)
+    [AlgSort[]]
+  else 
+    collect(Vector{AlgSort}.(collect.(Iterators.product(srt_poss...))))
+  end
+  tcs = map(combos) do combo
+    try lookup(theory, f_name, combo) catch e nothing end
+  end
+  # TODO also potentially disambiguate using the return type.
+  only(filter(x->!isnothing(x), tcs))
 end
 
 
 function generate_instance(
+  instance_module,
   theory::Interface,
   theory_module::Expr0,
   jltype_by_sort::Dict{AlgSort},
@@ -137,8 +174,9 @@ function generate_instance(
   end
 
   qualified_functions = map(typechecked_functions ∪ fixed_functions) do f 
-    f_name = nameof(f) 
-    tc = lookup(theory, f_name)  # args for overloaded names?
+    f_name = nameof(f)
+    tc = get_judgment_runtime(instance_module, theory, f_name, f.args, jltype_by_sort, vcat(whereparams, f.whereparams))
+
     tc isa TermConstructor || tc isa AlgAccessor || tc isa AlgFunction || error(
       "Only implement operations, not $tc")
     qualify_function(f, theory_module, model_type, whereparams)
@@ -150,9 +188,9 @@ function generate_instance(
     decl = impl_type_declaration(theory_module, model_type, whereparams, k, v)
     push!(impl_type_declarations, decl)
   end
-
+  
   runtime_impl_checks = map(collect(theory.ops)) do i
-    typecheck_runtime(theory_module, model_type, whereparams, theory[i], jltype_by_sort)
+    typecheck_runtime(theory_module, theory, model_type, whereparams, theory[i], jltype_by_sort)
   end
 
   docsink = gensym(:docsink)
@@ -222,16 +260,9 @@ ThCategory.id(model::Trait{<:Bar}, x::Foo) = ...
 function qualify_function(fun::JuliaFunction, theory_module, 
                           model_type::Union{Expr0, Nothing}, whereparams)
   (args, impl) = if !isnothing(model_type)
-    args = map(fun.args) do arg
-      @match arg begin
-        Expr(:(::), argname, ty) => Expr(:(::), argname, ty )
-        _ => arg
-      end
-    end
-
     m = gensym(:m)
     (
-      [Expr(:(::), m, Expr(:curly, InterfaceModules.Trait, Expr(:<:, model_type))), args...],
+      [Expr(:(::), m, Expr(:curly, InterfaceModules.Trait, Expr(:<:, model_type))), fun.args...],
       Expr(:let, Expr(:(=), :model, :($m.value)), fun.impl)
     )
   else
@@ -288,10 +319,14 @@ hasmethod(ThCategory.compose, (Trait{<:Baz}, Bar, Bar)) || throw(
   MissingMethodImplementation(...))
 ```
 """
-function typecheck_runtime(theory_name, model_type, whereparams, tc, jltype)
+function typecheck_runtime(theory_module, theory, model_type,
+                           whereparams, tc, jltype)
   name = nameof(tc)
   wm = :($(GlobalRef(ModelInterface, :Trait)){$model_type})
-  jltypes = [jltype[AlgSort(tc.localcontext[i][2])] for i in tc.args]
+  jltypes = map(tc.args) do i
+    ty = tc.localcontext[i][2]
+    runtime_type(theory, ty, jltype)
+  end
 
   # For default models, nullary constructors are handled funnily
   isnothing(model_type) && isempty(jltypes) && return :()
@@ -300,14 +335,46 @@ function typecheck_runtime(theory_name, model_type, whereparams, tc, jltype)
   jltypes′′ = map(jltypes) do t 
     Expr(:where, t, whereparams...)
   end
+  err = :($(GlobalRef(ModelInterface, :MissingMethodImplementation)
+           )($((theory.name)), $name, $(string.(jltypes)), $whereparams))
+  i = findfirst(==(tc), theory.judgments)
+
+  # what to do if we don't find a method with the right types
+  no_method = if !haskey(theory.defaults, i)
+    Expr(:call, :throw, err)
+  else
+    args = map(tc.args) do argᵢ
+      argname, argtype = tc.localcontext.args[argᵢ]
+      argtype = jltype[AlgSort(argtype)]
+      Expr(:(::), argname, argtype)
+    end
+    return_type = jltype[AlgSort(tc.type)]
+    f = JuliaFunction(name, args, Expr0[], whereparams, return_type, 
+                      theory.defaults[i], nothing)
+    q = qualify_function(f, theory_module, model_type, Expr0[])
+    generate_function(q)
+  end
+  
   quote
-    any(==(Union{}), [$(jltypes′′...)]
-       ) || hasmethod($(theory_name).$(name), Tuple{$(jltypes′...)} where {$(whereparams...)}
-                     )  || throw($(GlobalRef(ModelInterface, :MissingMethodImplementation)
-                                  )($((theory_name)), $name, $(string.(jltypes)), $whereparams)
-    )
+    if !any(==(Union{}), [$(jltypes′′...)]) 
+      if !hasmethod($(theory_module).$(name), 
+                      Tuple{$(jltypes′...)} where {$(whereparams...)})
+        $(no_method)
+      end
+    end
   end
 end
+
+function runtime_type(theory::Interface, t::TypeApp, jltypes::Dict)
+  base = jltypes[AlgSort(t)]
+  params = runtime_type.(Ref(theory), t.params, Ref(jltypes))
+  isempty(params) ? base : Expr(:curly, base, params...)
+end
+
+function runtime_type(theory::Interface, t::VarArgType, jltypes::Dict)
+  Expr(:curly, :Vararg, runtime_type(theory, get(t), jltypes))
+end
+
 
 """
 Automatically add `Trait` trait parameter to some specified methods in a 

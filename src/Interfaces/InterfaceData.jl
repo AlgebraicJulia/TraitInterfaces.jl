@@ -26,6 +26,7 @@ to distinct abstract types can then cause method ambiguities.
   judgments::Vector{Judgment}
   aliases::Dict{Symbol, Symbol}
   external::Dict{Symbol, Vector{Symbol}} # give a fully-qualified module name
+  defaults::Dict{Int, Expr}
 
   # cached data for easy access
   types::Set{Int}
@@ -38,10 +39,10 @@ end
 function Interface(s::Symbol) 
   aliases = Dict{Symbol,Symbol}()
   external = Dict{Symbol, Vector{Symbol}}()
-
+  defaults = Dict{Int, Expr}()
   lookup = DefaultDict{Symbol, Dict{Vector{AlgSort}, Int}}(
             () -> Dict{Vector{AlgSort}, Int}())
-  Interface(s, Judgment[], aliases, external,
+  Interface(s, Judgment[], aliases, external, defaults,
             Set{Int}(), Set{Int}(), Set{Int}(), Set{Int}(), lookup)
 end
 
@@ -71,7 +72,8 @@ end
 Base.getindex(f::Interface, i) = f.judgments[i]
 
 Base.copy(f::Interface) = Interface(f.name, deepcopy(f.judgments), 
-  copy(f.aliases), deepcopy(f.external), copy(f.types), copy(f.ops), 
+  copy(f.aliases), deepcopy(f.external), deepcopy(f.defaults), 
+  copy(f.types), copy(f.ops), 
   copy(f.accessors), copy(f.axioms), deepcopy(f.lookup))
 
 Base.length(f::Interface) = length(f.judgments)
@@ -120,10 +122,12 @@ function _add_judgment!(i::Interface, c::AlgAccessor, n::Int)
   add_lookup!(i, c.name, [AlgSort(c.typecon)], n)
 end
 
+AlgSorts(v::Vector) = Vector{AlgSort}(AlgSort.(v))
+
 function _add_judgment!(i::Interface, c::TypeConstructor, n::Int)
   push!(i.types, n)
   c_args = c.localcontext[c.args]
-  add_lookup!(i, c.name, AlgSort.(last.(c_args)), n)
+  add_lookup!(i, c.name, AlgSorts(last.(c_args)), n)
 
   for (idx, (argname, _)) in enumerate(c_args) # should we also store the type?
     add_judgment!(i, AlgAccessor(argname, c.name, idx))
@@ -133,13 +137,13 @@ end
 function _add_judgment!(i::Interface, c::TermConstructor, n::Int)
   push!(i.ops, n)
   c_args = c.localcontext[c.args]
-  add_lookup!(i, c.name, AlgSort.(last.(c_args)), n)
+  add_lookup!(i, c.name, AlgSorts(last.(c_args)), n)
 end
 
 function _add_judgment!(i::Interface, c::AlgFunction, n::Int)
   push!(i.ops, n)
   c_args = c.localcontext[c.args]
-  add_lookup!(i, c.name, AlgSort.(last.(c_args)), n)
+  add_lookup!(i, c.name, AlgSorts(last.(c_args)), n)
 end
 
 _add_judgment!(i::Interface, ::AlgAxiom, n::Int) = push!(i.axioms, n)

@@ -66,8 +66,7 @@ function parse_line!(theory::Interface, e::Expr, linenumber,
           line = only(lines)
           iⱼ = parse_binding_line!(theory, line, linenumber)
           n = nameof(theory[iⱼ])
-          val = fq_eval([current_module; n])
-          theory.external[n] = fqmn(parentmodule(val))
+          theory.external[n] = fqmn(which(fq_eval(current_module), n))
         else
           error("Unexpected pseudomacro $mac")
         end
@@ -108,20 +107,45 @@ function parse_binding_line!(theory::Interface, e, linenumber)::Int
       parseaxiom!(theory, localcontext, type_expr, [t1,t2])
     Expr(:comparison, args...) => 
       parseaxiom!(theory, localcontext, type_expr, args[1:2:end])
+    Expr(:function, call, body) => parsedefault!(theory, call, body)
     _ => parseconstructor!(theory, localcontext, type_expr, head)
   end
 end
 
+function parsedefault!(theory::Interface, call::Expr, body::Expr)::Int
+  call.head == :call || error("Bad default method $call $body")
+  funname = call.args[1]
+  name_srts = map(call.args[2:end]) do arg 
+    @match arg begin 
+      Expr(:(::), n, s) => (n, s)
+    end
+  end
+  names = first.(name_srts)
+  srts = AlgSort.(last.(name_srts))
+  j = lookup(theory, funname, srts)
+  i = findfirst(==(j), theory.judgments)
+  j isa TermConstructor || error("Bad $j")
+  first.(j.localcontext.args[j.args]) == names || error(
+    "Bad names $names")
+  theory.defaults[i] = body
+  i
+end
+
 function parseconstructor!(theory::Interface, localcontext, type_expr, e)::Int
-  (name, arglist) = @match e begin
-    Expr(:call, name, args...) => (name, args)
-    name::Symbol => (name, [])
+  (name, typeparams, arglist) = @match e begin
+    Expr(:call, Expr(:curly, name::Symbol, targs...), args...) => (name, targs, args)
+    Expr(:call, name, args...) => (name, [], args)
+    name::Symbol => (name, [], [])
+    Expr(:curly, name::Symbol, args...) => (name, args, [])
     _ => error("failed to parse head of term constructor $e")
   end
   args = parseargs!(theory, arglist, localcontext)
+  tps = [parsetype(theory, localcontext, x) for x in typeparams]
+
   @match type_expr begin
-    :TYPE => add_judgment!(theory, TypeConstructor(name, localcontext, args))
+    :TYPE => add_judgment!(theory, TypeConstructor(name, localcontext, args, tps))
     _ => begin
+      isempty(typeparams) || error("operators don't have type params $e")
       type = @match type_expr begin 
         Expr(:vect, _...) => fromexpr(theory, localcontext, type_expr, TypeScope)
         _ => parsetype(theory, localcontext, type_expr)
@@ -169,10 +193,10 @@ function parseargs!(theory::Interface, exprs::AbstractVector, scope::TypeScope)
   end))
 end
 
-function parse_methodapp(theory, scope, fun::Symbol, argexprs)
-  args = Vector{AlgTerm}(parseterm.(Ref(theory), Ref(scope), argexprs))
-  MethodApp(get(theory.aliases, fun, fun), args)
-end
+# function parse_methodapp(theory, scope, fun::Symbol, argexprs)
+#   args = Vector{AlgTerm}(parseterm.(Ref(theory), Ref(scope), argexprs))
+#   MethodApp(get(theory.aliases, fun, fun), args)
+# end
 
 function parse_binding(theory, scope, e)
   @match e begin
@@ -184,9 +208,19 @@ end
 
 function parsetype(theory, scope, e)::AlgType
   @match e begin
-    s::Symbol => AlgType(parse_methodapp(theory, scope, s, []))
-    Expr(:call, head, args...) && if head != :(==) end =>
-      AlgType(parse_methodapp(theory, scope, head, args))
+    s::Symbol => TypeApp(s, [],[])
+    Expr(:curly, name::Symbol, xargs...) => begin 
+      args = Vector{AlgType}(parsetype.(Ref(theory), Ref(scope), xargs))
+      if name == :Vararg
+        VarArgType(only(args))
+      else 
+        TypeApp(get(theory.aliases, name, name), [], args)
+      end
+    end
+    Expr(:call, head, xargs...) => begin
+      args = Vector{AlgTerm}(parseterm.(Ref(theory), Ref(scope), xargs))
+      TypeApp(get(theory.aliases, head, head), args, [])
+    end
     _ => error("could not parse AlgType from $e")
   end
 end
@@ -195,12 +229,14 @@ function parseterm(theory::Interface, localcontext, e)
   @match e begin
     s::Symbol => begin
       value = localcontext[s]
-      AlgTerm(s)
+      TermVar(s)
     end
-    Expr(:call, head::Symbol, argexprs...) => 
-      AlgTerm(parse_methodapp(theory, localcontext, head, argexprs))
+    Expr(:call, head::Symbol, argexprs...) => begin
+      args = Vector{AlgTerm}(parseterm.(Ref(theory), Ref(localcontext), argexprs))
+      TermApp(get(theory.aliases, head, head), args)
+  end
     Expr(:(::), val, type) => 
-      AlgTerm(Constant(val, fromexpr(theory, localcontext, type, AlgType)))
+      error("HERE")#AlgTerm(Constant(val, fromexpr(theory, localcontext, type, AlgType)))
     e::Expr => error("could not parse AlgTerm from $e")
     _ => error("Cannot parse $e")
   end

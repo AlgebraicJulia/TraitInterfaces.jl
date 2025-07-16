@@ -105,6 +105,8 @@ function parse_function(expr::Expr)::JuliaFunction
   args = map(args) do arg
     @match arg begin
       Expr(:(::), x, T) => arg
+      Expr(:..., Expr(:(::), x, T)) => 
+        Expr(:(::), x, Expr(:curly, :Vararg, T))
       x::Symbol => :($x::Any)
       Expr(:(::), T) => Expr(:(::), gensym(), T)
       _ => throw(ParseError("Ill-formed argument expression $arg"))

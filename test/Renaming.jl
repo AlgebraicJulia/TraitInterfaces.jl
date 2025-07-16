@@ -40,7 +40,7 @@ module RingModule
     left_distrib  := a × (b + c) == (a × b) + (a × c) ⊣ [(a, b, c)::X]
     right_distrib := (b + c) × a == (b × a) + (c × a) ⊣ [(a, b, c)::X]
   end
-end 
+end
 using .RingModule: ThRing
 T = ThRing.Meta.theory
 
