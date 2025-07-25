@@ -443,7 +443,7 @@ It would be nice to compare the features of TraitInterfaces.jl with the followin
 - [Interfaces.jl](https://github.com/rafaqz/Interfaces.jl)
 - [RequiredInterfaces.jl](https://github.com/Seelengrab/RequiredInterfaces.jl)
 - [DuckDispatch.jl](https://github.com/mrufsvold/DuckDispatch.jl)
-- [MultipleInterfaces](https://github.com/CameronBieganek/MultipleInterfaces.jl)
+- [MultipleInterfaces.jl](https://github.com/CameronBieganek/MultipleInterfaces.jl)
 
 ## Documentation
 
