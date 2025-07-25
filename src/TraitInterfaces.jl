@@ -10,5 +10,4 @@ include("Interfaces/module.jl")
 include("Implementations/module.jl")
 @reexport using .Implementations
 
-
 end # module TraitInterfaces

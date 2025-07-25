@@ -115,6 +115,44 @@ two_noises_unsafe(a, b) = noise[a]() * " and " * noise(b)
 @test_throws MethodError two_noises_unsafe(100, 101)
 ```
 
+## AbstractArray
+
+For [AbstractArray](https://docs.julialang.org/en/v1/manual/interfaces/), like above we have the ability to either explicitly put a type parameter in our interface for the array type *or* directly make the array type itself be the trait. Given that the below subset of the interface has exactly one mention of the array type in every method, we choose the latter option.
+
+```julia 
+@interface ThAbstractArray begin
+  @import Int::TYPE
+  @import Tuple::TYPE
+
+  V::TYPE # value type
+
+  size()::Tuple{Vararg{Int}}
+  getindex(i::Vararg{Int})::V
+  length()::Int
+
+  function length() # default implementation
+    prod(size[model]())
+  end
+end
+
+ThAbstractArray.Meta.@wrapper AbsArray
+
+@instance ThAbstractArray{V=T} [model::Vector{T}] where T begin 
+  size()::Tuple{Vararg{Int}} = model.size
+  function getindex(i′::Int...)
+    i = only(i′)
+    @boundscheck checkbounds(model, i)
+    Core.memoryrefget(Core.memoryrefnew(model.ref, i, false), 
+                      :not_atomic, false)
+  end
+end
+
+arr = AbsArray([2,4,6])
+
+@test length(arr) == 3
+@test arr[2] == 4
+```
+
 ## Axioms, aliases, extensions, importing: [algebraic theory example](test/Renaming.jl)
 
 To showcase some more features of our interfaces, let's consider the algebraic theory of [monoids](https://en.wikipedia.org/wiki/Monoid): this is an interface that a datatype may or may not implement (or, implement in many different ways). This interface says that some abstract type must be equipped with a multiplication operation and a distinguished unit term. The unit must be a do-nothing element when multiplied with. Furthermore, this multiplication must be associative: this means, even though multiplication is defined as a binary operator, all that matters for evaluating some big multiplication `a ⋅ b ⋅ c ⋅ ... ⋅ z` is the order of the elements, rather than how we chose to parenthesize it as a bunch of binary applications of `⋅`.
@@ -273,7 +311,19 @@ This is nice expressivity for typechecking expressions, though Julia isn't a nat
 
 # Relation to GATLab 
 
-This repo is the core of GATlab, developed by Owen Lynch and Kris Brown, based on Evan Patterson's original work on GATs (generalized algebraic theories) in Catlab. In this repo, the GAT aspects have been stripped away. Many projects in the AlgebraicJulia ecosystem rely on interfaces without using the understanding of interfaces as being the objects of category. GATlab will focus on this latter goal.
+This repo is the core of [GATlab.jl](https://github.com/AlgebraicJulia/GATlab.jl) ([arXiv](https://arxiv.org/abs/2404.04837)), developed by Owen Lynch and Kris Brown, based on Evan Patterson's original work on GATs (generalized algebraic theories) in Catlab. In this repo, the GAT aspects have been stripped away. Many projects in the AlgebraicJulia ecosystem rely on interfaces without using the understanding of interfaces as being the objects of category. GATlab will focus on this latter goal.
+
+# Other interface packages
+
+It would be nice to compare the features of TraitInterfaces.jl with the following packages:
+
+- [WhereTraits.jl](https://github.com/jolin-io/WhereTraits.jl)
+- [SimpleTraits.jl](https://github.com/mauro3/SimpleTraits.jl)
+- [CanonicalTraits.jl](https://github.com/thautwarm/CanonicalTraits.jl)
+- [TraitWrappers.jl](https://github.com/xiaodaigh/TraitWrappers.jl)
+- [Interfaces.jl](https://github.com/rafaqz/Interfaces.jl)
+- [RequiredInterfaces.jl](https://github.com/Seelengrab/RequiredInterfaces.jl)
+- [DuckDispatch.jl](https://github.com/mrufsvold/DuckDispatch.jl)
 
 # Documentation
 

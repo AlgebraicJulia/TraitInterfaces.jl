@@ -36,6 +36,7 @@ to distinct abstract types can then cause method ambiguities.
   lookup::DefaultDict{Symbol, Dict{Vector{AlgSort}, Int}}
 end
 
+""" Create an empty interface - just provide the name of the interface """
 function Interface(s::Symbol) 
   aliases = Dict{Symbol,Symbol}()
   external = Dict{Symbol, Vector{Symbol}}()
@@ -91,6 +92,7 @@ abstract_sorts(Th::Interface) =
 # Mutating 
 ###########
 
+""" Combine judgments from two interfaces, removing duplicates """
 function Base.union!(I::Interface, J::Interface)
   for j in J.judgments
     j ∈ I || add_judgment!(I, j)

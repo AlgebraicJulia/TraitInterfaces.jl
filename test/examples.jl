@@ -152,8 +152,7 @@ Tr = Trait([3,4,5])
 
 # Arrays
 ########
-using TraitInterfaces, Test
-import Base: length, size, getindex
+
 @interface ThAbstractArray begin
   @import Int::TYPE
   @import Tuple::TYPE
@@ -169,12 +168,27 @@ import Base: length, size, getindex
   end
 end
 
+ThAbstractArray.Meta.@wrapper AbsArray
+
 @instance ThAbstractArray{V=T} [model::Vector{T}] where T begin 
-  size()::Tuple{Vararg{Int}} = (length(model),)
-  getindex(i::Int...) = model[only(i)] 
+  size()::Tuple{Vararg{Int}} = model.size
+  function getindex(i′::Int...)
+    i = only(i′)
+    @boundscheck checkbounds(model, i)
+    Core.memoryrefget(Core.memoryrefnew(model.ref, i, false), 
+                      :not_atomic, false)
+  end
 end
 
-@test length(Trait([1,2,3])) == 3
+arr = AbsArray([2,4,6])
+
+@test length(arr) == 3
+@test arr[2] == 4
+
+@withmodel [1,2,3] (length, getindex) begin
+  @test length() == 3
+  @test getindex(2) == 2 
+end
 
 struct SquaresVector 
   count::Int 

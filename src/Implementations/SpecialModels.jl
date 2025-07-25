@@ -80,6 +80,7 @@ _implements(::TerminalModel′, ::Module, ::Symbol, types::Vector{<:Type}) =
 ###########
 
 impl_type(d::Dispatch, x::Symbol) = d[x]
+
 impl_type(d::Dispatch, x::Function) = d[nameof(x)]
 
 impl_type(::InitialModel′, ::Union{Function, Symbol}) = Union{}

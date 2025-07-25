@@ -40,6 +40,9 @@ of an operation to some other terms.
   args::Vector{AlgTerm}
 end
 
+"""
+Reference something in the context by name
+"""
 @struct_hash_equal struct TermVar <: AlgTerm
   var::Symbol
 end
@@ -135,7 +138,7 @@ TypeScope() = TypeScope(Pair{Symbol, AlgType}[], Pair{Symbol, AlgType}[])
 # Type/Term constructors
 #-----------------------
 
-# Either a TypeConstructor or a TermConstructor
+""" Either a TypeConstructor or a TermConstructor """
 abstract type TrmTypConstructor <: Judgment end
 
 argsof(t::TrmTypConstructor) = t.args
@@ -144,6 +147,7 @@ localcontext(t::TrmTypConstructor) = t.localcontext
 
 signature(t::TrmTypConstructor) = AlgSort.(last.(localcontext(t)[argsof(t)]))
 
+""" Declare a type (possibly dependent on other types and terms) """
 @struct_hash_equal struct TypeConstructor <: TrmTypConstructor
   name::Symbol
   localcontext::TypeScope
@@ -151,6 +155,7 @@ signature(t::TrmTypConstructor) = AlgSort.(last.(localcontext(t)[argsof(t)]))
   typeargs::Vector{AlgType}
 end 
 
+""" Declare an operation """
 @struct_hash_equal struct TermConstructor <: TrmTypConstructor
   name::Symbol
   localcontext::TypeScope
@@ -158,6 +163,7 @@ end
   type::Union{TypeScope,AlgType}
 end
 
+""" Declare two (context dependent) terms are equal """
 @struct_hash_equal struct AlgAxiom <: Judgment
   name::Maybe{Symbol}
   localcontext::TypeScope

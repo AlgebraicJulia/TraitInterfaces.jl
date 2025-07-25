@@ -2,8 +2,6 @@
 Any Julia value can be a trait which implements an interface, `I`. A trait 
 `t::T` is considered to be implementing `I` iff, for all operations in `I`
 `f(::A,::B,...)`, we have `hasmethod(f, (Trait{M}, A, B)) == true`. 
-
-Also for each sort `s`, we need `hasmethod(impl_type, (M, I.s) == true`.
 """
 module ModelInterface
 
@@ -115,7 +113,8 @@ macro instance(head, model, body)
   model_type, whereparams = parse_model_param(model)
 
   # Create the actual instance
-  generate_instance(__module__, theory, theory_module, jltype_by_sort, model_type, whereparams, body)
+  generate_instance(__module__, theory, theory_module, jltype_by_sort, 
+                    model_type, whereparams, body)
 end
 
 """
@@ -123,7 +122,8 @@ We need to look at the method *after* having forgotten the dependent types
 and still be able to tell what method was being implemented. Ambiguity can
 arise. Check there is only one possibility given the sorts provided.
 """
-function get_judgment_runtime(instance_module,theory, f_name, args, jltype_by_sort, whereparams)
+function get_judgment_runtime(instance_module,theory, f_name, args, 
+                              jltype_by_sort, whereparams)
   where_eval(x) = instance_module.eval(Expr(:where, x, whereparams...))
   j_eval = Dict(k=>where_eval(v) for (k,v) in jltype_by_sort)
   srt_poss = map(args) do argexp 
@@ -175,7 +175,8 @@ function generate_instance(
 
   qualified_functions = map(typechecked_functions ∪ fixed_functions) do f 
     f_name = nameof(f)
-    tc = get_judgment_runtime(instance_module, theory, f_name, f.args, jltype_by_sort, vcat(whereparams, f.whereparams))
+    tc = get_judgment_runtime(instance_module, theory, f_name, f.args, 
+                              jltype_by_sort, vcat(whereparams, f.whereparams))
 
     tc isa TermConstructor || tc isa AlgAccessor || tc isa AlgFunction || error(
       "Only implement operations, not $tc")

@@ -1,7 +1,6 @@
 module InterfaceModules
 export @interface, @theory, Trait, Dispatch
 
-
 using StructEquality
 using MLStyle
 using Markdown
@@ -64,7 +63,7 @@ macro theory(head, body)
   theory_impl(head, body, __module__)
 end
 
-
+""" Declare an interface (creates a module), possibly by extending an old one """
 macro interface(head, body)
   theory_impl(head, body, __module__)
 end
@@ -72,7 +71,7 @@ end
 function theory_impl(head, body, __module__)
   (name, parentname) = @match head begin
     (name::Symbol) => (name, nothing)
-    Expr(:(<:), name, parent) => (name, parent) # TODO make parents
+    Expr(:(<:), name, parent) => (name, parent)
     _ => error("could not parse head of @theory: $head")
   end
 
@@ -267,9 +266,12 @@ function wrapper(name::Symbol, t::Interface, mod)
         @doc $($(Parsing.mdp))(@doc $doctarget) $n
 
         # Define == and hash
-        $(Expr(:macrocall, $(GlobalRef(StructEquality, Symbol("@struct_hash_equal"))), $(mod), $(:n)))
+        $(Expr(:macrocall, $(GlobalRef(StructEquality, 
+                                       Symbol("@struct_hash_equal"))), 
+                $(mod), $(:n)))
 
-        Base.get(x::$n) = x.val 
+        Base.get(x::$n) = x.val
+
         $it(x::$n, o::Symbol) = x.types[o]
 
         # Dispatch on model value for all declarations in theory
@@ -323,18 +325,24 @@ function wrapper(name::Symbol, t::Interface, mod)
           end
 
           function $n(x::Any) 
-            $($(GlobalRef(InterfaceModules, :implements)))(x, $($name), [$(Xs...)]) || error("Invalid $($($(name))) model: $x")
+            $($(GlobalRef(InterfaceModules, :implements)))(
+              x, $($name), [$(Xs...)]) || error("Invalid $($($(name))) model: $x"
+             )
             types = $Xdict
             new{$(Xs...)}(x, types)
           end
         end
+
         # Apply the caught documentation to the new struct
         @doc $($(Parsing.mdp))(@doc $doctarget) $n
 
         # Define == and hash
-        $(Expr(:macrocall, $(GlobalRef(StructEquality, Symbol("@struct_hash_equal"))), $(mod), $(:n)))
+        $(Expr(:macrocall, $(GlobalRef(StructEquality, 
+                                       Symbol("@struct_hash_equal"))), 
+                $(mod), $(:n)))
 
-        Base.get(x::$n) = x.val 
+        Base.get(x::$n) = x.val
+
         $it(x::$n, o::Symbol) = x.types[o]
 
         # Dispatch on model value for all declarations in theory
@@ -345,7 +353,9 @@ function wrapper(name::Symbol, t::Interface, mod)
               $($(name)).$op(Trait(x.val), args...; kw...)
           end)
         end)
+
       nothing
+      
       end)
     end
   end

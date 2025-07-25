@@ -193,11 +193,6 @@ function parseargs!(theory::Interface, exprs::AbstractVector, scope::TypeScope)
   end))
 end
 
-# function parse_methodapp(theory, scope, fun::Symbol, argexprs)
-#   args = Vector{AlgTerm}(parseterm.(Ref(theory), Ref(scope), argexprs))
-#   MethodApp(get(theory.aliases, fun, fun), args)
-# end
-
 function parse_binding(theory, scope, e)
   @match e begin
     Expr(:(::), name::Symbol, type_expr) =>

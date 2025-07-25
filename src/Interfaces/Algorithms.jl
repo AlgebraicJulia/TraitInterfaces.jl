@@ -11,15 +11,15 @@ using ..InterfaceData: add_judgment!, add_alias!
 Throw an error if a the head of an AlgTerm (which refers to a term constructor)
 has arguments of the wrong sort. Returns the sort of the term.
 """
-function sortcheck(theory::Interface, ctx::TypeScope, t::AlgTerm)::AlgSort
-  if t isa TermApp 
-    argsorts = sortcheck.(Ref(theory), Ref(ctx), t.args)
-    m = t.method
-    judgment = lookup(theory, get(theory.aliases, m, m), argsorts)
+function sortcheck(theory::Interface, ctx::TypeScope, term::AlgTerm)::AlgSort
+  if term isa TermApp 
+    argsorts = sortcheck.(Ref(theory), Ref(ctx), term.args)
+    method = get(theory.aliases, term.method, term.method)
+    judgment = lookup(theory, method, argsorts)
     judgment isa TermConstructor || error("Bad judgment $t \n$judgment")
     AlgSort(judgment.type)
-  elseif t isa TermVar 
-    AlgSort(ctx[get(t)])
+  elseif term isa TermVar 
+    AlgSort(ctx[get(term)])
   end
 end
 
@@ -49,11 +49,13 @@ function rename(j::AlgAxiom, names::Dict{Symbol, Symbol})
 end
 
 function rename(j::TypeConstructor, names::Dict{Symbol, Symbol})
-  TypeConstructor(get(names, j.name, j.name), rename(j.localcontext, names), j.args, rename.(j.typeargs, Ref(names)))
+  TypeConstructor(get(names, j.name, j.name), rename(j.localcontext, names), 
+                  j.args, rename.(j.typeargs, Ref(names)))
 end
 
 function rename(j::TermConstructor, names::Dict{Symbol, Symbol})
-  TermConstructor(get(names, j.name, j.name), rename(j.localcontext, names), j.args, rename(j.type, names))
+  TermConstructor(get(names, j.name, j.name), rename(j.localcontext, names), 
+                  j.args, rename(j.type, names))
 end
 
 function rename(j::AlgSort, names::Dict{Symbol, Symbol})
