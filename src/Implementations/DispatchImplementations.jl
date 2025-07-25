@@ -5,22 +5,13 @@
 2. Assigning all types in the interface the empty (`Union{}`) type
 3. Assigning all types in the interface the singleton (`Nothing`) type
 """
-module SpecialModels
-export Dispatch, InitialModel, TerminalModel, InitialModel′, TerminalModel′
+module DispatchImplementations
+export Dispatch
 
 using ...Interfaces
 import ...Interfaces: Dispatch
-using ...Interfaces.InterfaceModules: InitialModel′, TerminalModel′
 import ..Check: _implements, implements, impl_type
 
-
-# Public constants
-##################
-""" The unique term of type `InitialModel′` """
-const InitialModel = InitialModel′()
-
-""" The unique term of type `TerminalModel′` """
-const TerminalModel = TerminalModel′()
 
 # Dispatch
 ###########
@@ -61,20 +52,6 @@ function _implements(::Dispatch, theory::Module, name::Symbol, types::Vector{<:T
   hasmethod(f, Tuple{types...})
 end
 
-function implements(::InitialModel′, ::Module, ::Symbol, types=nothing) 
-  isnothing(types) || all(==(Union{}), types)
-end
-
-_implements(::InitialModel′, ::Module, ::Symbol, types::Vector{<:Type}) =
-  all(==(Union{}), types)
-
-function implements(::TerminalModel′, ::Module, ::Symbol, types=nothing) 
-  isnothing(types) || all(==(Nothing), types)
-end
-
-_implements(::TerminalModel′, ::Module, ::Symbol, types::Vector{<:Type}) =
-  all(==(Nothing), types)
-
 
 # Impl Type
 ###########
@@ -82,10 +59,5 @@ _implements(::TerminalModel′, ::Module, ::Symbol, types::Vector{<:Type}) =
 impl_type(d::Dispatch, x::Symbol) = d[x]
 
 impl_type(d::Dispatch, x::Function) = d[nameof(x)]
-
-impl_type(::InitialModel′, ::Union{Function, Symbol}) = Union{}
-
-impl_type(::TerminalModel′, ::Union{Function, Symbol}) = Nothing
-
 
 end # module

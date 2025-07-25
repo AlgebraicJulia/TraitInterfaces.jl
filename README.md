@@ -8,9 +8,11 @@ Although Julia ultimately works via type-based dispatch under the hood, we will 
 traits](https://ucidatascienceinitiative.github.io/IntroToJulia/Html/DispatchDesigns#Traits-and-THTT) to have the feel of controlling dispatch via explicit choice of an 
 implementation, rather than the types of the arguments.
 
+## Usage
+
 To first approximation, an interface principally consists in the declarations of **types** and **operations**. 
 
-## The basics: [animal example](test/examples.jl)
+### The basics: [animal example](test/examples.jl)
 
 Borrowing an example from [Rust docs](https://doc.rust-lang.org/rust-by-example/trait.html): we declare an interface `AnimalInterface`, which says any implementation of `AnimalInterface` must provide a means (called `name`) of providing a `Base.String` and another means (called `noise`) of providing a `Base.String`. 
 
@@ -115,7 +117,7 @@ two_noises_unsafe(a, b) = noise[a]() * " and " * noise(b)
 @test_throws MethodError two_noises_unsafe(100, 101)
 ```
 
-## AbstractArray
+### AbstractArray example
 
 For [AbstractArray](https://docs.julialang.org/en/v1/manual/interfaces/), like above we have the ability to either explicitly put a type parameter in our interface for the array type *or* directly make the array type itself be the trait. Given that the below subset of the interface has exactly one mention of the array type in every method, we choose the latter option.
 
@@ -153,7 +155,7 @@ arr = AbsArray([2,4,6])
 @test arr[2] == 4
 ```
 
-## Axioms, aliases, extensions, importing: [algebraic theory example](test/Renaming.jl)
+### Axioms, aliases, extensions, importing: [algebraic theory example](test/Renaming.jl)
 
 To showcase some more features of our interfaces, let's consider the algebraic theory of [monoids](https://en.wikipedia.org/wiki/Monoid): this is an interface that a datatype may or may not implement (or, implement in many different ways). This interface says that some abstract type must be equipped with a multiplication operation and a distinguished unit term. The unit must be a do-nothing element when multiplied with. Furthermore, this multiplication must be associative: this means, even though multiplication is defined as a binary operator, all that matters for evaluating some big multiplication `a ⋅ b ⋅ c ⋅ ... ⋅ z` is the order of the elements, rather than how we chose to parenthesize it as a bunch of binary applications of `⋅`.
 
@@ -268,7 +270,7 @@ end
 @test square[ℤm3](2) == 1
 ```
 
-## Dependent types: wiring diagram example 
+### Dependent types: wiring diagram example 
 
 One may have types for wires, ports, and boxes if one were designing an interface for wiring diagrams.
 
@@ -309,11 +311,128 @@ end
 
 This is nice expressivity for typechecking expressions, though Julia isn't a natural fit for value-parameterized types. Julia *does* have nice type-parameterized types, and sometimes we can take values and promote them to types (e.g. this works with integers, but not vectors).
 
-# Relation to GATLab 
+## How it works
+
+In this section, we'll see what `@interface`, `@wrapper`, and `@implements` desugar to in order to gain an understanding of how TraitInterfaces.jl works. These will be slightly editorialized for readability and clarity.
+
+### `@interface` macro
+Let's start with an example from above, supposing this is being defined in some module `Foo`:
+
+```julia
+@interface AnimalInterface′ begin
+  Species::TYPE         # 'abstract type'
+  @import String::TYPE  # 'concrete type'
+  name(s::Species)::String
+  noise(s::Species)::String
+end 
+```
+
+We start with putting the abstract types and operations into the namespace where `@interface` is being declared. Then these are imported into a newly created module:
+
+```julia
+function name end 
+function noise end 
+function Species end 
+
+module AnimalInterface′
+  export name, noise, Species
+  import ..Foo: name, noise, Species
+  module Meta
+    struct T end # A special type associated with the interface
+
+    # Copy of the Julia data structure that stores the content of the interface
+    const theory = Interface(:AnimalInterface′, Judgment[...])
+
+    macro wrapper(n)
+      ... # to be explained below
+    end
+  end
+end
+```
+
+For convenience, we add `getindex` methods so that we can call `my_operation[implementation](args...)` to avoid requiring explicit `Trait()` wrapping. E.g.:
+
+```julia
+Base.getindex(::typeof(name), m::Any) = (args...; kw...) -> name(Trait(m), args...; kw...)
+Base.getindex(::typeof(noise), m::Any) = (args...; kw...) -> noise(Trait(m), args...; kw...)
+```
+
+### `@implements` macro
+
+Now, given the following implementation:
+
+```julia 
+
+struct SheepImplsAnimalTrait end
+
+@instance AnimalInterface′{Species=Sheep} [model::SheepImplsAnimalTrait] begin 
+  name(s::Sheep)::String = s.name
+  noise(s::Sheep)::String = s.naked ? "baaaaah?" : "baaaaah!"
+end
+```
+
+We first generate the following methods:
+
+```julia
+function AnimalInterface′.name(m::Trait{<:SheepImplsAnimalTrait}, s::Sheep)::String
+    let model = m.value
+        s.name # code that was explicitly written by user appears here
+    end
+end
+
+function AnimalInterface′.noise(m::Trait{<:SheepImplsAnimalTrait}, s::Sheep)::String
+    let model = (m).value
+      s.naked ? "baaaaah?" : "baaaaah!"
+    end
+end
+```
+
+Then we generate code to check whether the interface has been fully implemented:
+
+```julia
+if !(hasmethod(AnimalInterface′.noise, Tuple{Trait{SheepImplsAnimalTrait}, Sheep}))
+  throw(MissingMethodImplementation(...))
+end
+# likewise for noise
+```
+
+Lastly we store the information of how this implementation assigned concrete types to the abstract type of the interface:
+
+```julia
+impl_type(::SheepImplsAnimalTrait, ::typeof(AnimalInterface′.Species)) = Sheep
+```
+
+### `@wrapper` macro
+
+Let's look at what happens when we declare that `Bar <: Baz` is a wrapper type for implementations of `AnimalInterface′` via the code `AnimalInterface′.Meta.@wrapper Bar <: Baz`:
+
+```julia
+@struct_hash_equal struct Bar <: Baz
+    val::Any
+    types::Dict{Symbol, Type}
+    function Bar(x::Any)
+        types = try
+          Dict(:Species => impl_type(x, AnimalInterface′.Species))
+        catch _
+          error("Invalid $AnimalInterface′ model: $x")
+        end
+        new(x, types)
+    end
+end
+
+Base.get(x::Bar) = x.val
+impl_type(x::Bar, o::Symbol) = x.types[o]
+Animal′.noise(x::Bar, args...; kw...) = Animal′.noise(Trait(x.val), args...; kw...)
+Animal′.name(x::Bar, args...; kw...) = Animal′.name(Trait(x.val), args...; kw...)
+```
+
+## Relation to GATLab 
 
 This repo is the core of [GATlab.jl](https://github.com/AlgebraicJulia/GATlab.jl) ([arXiv](https://arxiv.org/abs/2404.04837)), developed by Owen Lynch and Kris Brown, based on Evan Patterson's original work on GATs (generalized algebraic theories) in Catlab. In this repo, the GAT aspects have been stripped away. Many projects in the AlgebraicJulia ecosystem rely on interfaces without using the understanding of interfaces as being the objects of category. GATlab will focus on this latter goal.
 
-# Other interface packages
+However, it's important that a certain well-behaved subset of interfaces can be reasoned about compositionally, so that, when one (inevitably) wants to *change* ones interface or combine interfaces in nontrivial ways, it is possible to have good automation for the migration of implementations of those interfaces, too. GATlab will aim to provide this.
+
+## Other interface packages
 
 It would be nice to compare the features of TraitInterfaces.jl with the following packages:
 
@@ -324,8 +443,9 @@ It would be nice to compare the features of TraitInterfaces.jl with the followin
 - [Interfaces.jl](https://github.com/rafaqz/Interfaces.jl)
 - [RequiredInterfaces.jl](https://github.com/Seelengrab/RequiredInterfaces.jl)
 - [DuckDispatch.jl](https://github.com/mrufsvold/DuckDispatch.jl)
+- [MultipleInterfaces](https://github.com/CameronBieganek/MultipleInterfaces.jl)
 
-# Documentation
+## Documentation
 
 To locally build the documentation and the literate code examples, run the following in the command line:
 

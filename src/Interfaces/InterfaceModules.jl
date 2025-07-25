@@ -31,27 +31,15 @@ function Base.getindex(::typeof(construct), m::Any)
 end
 
 
-##################
-# Special models #
-##################
+###########################
+# Special Implementations #
+###########################
 """
 The `Dispatch` implementation of an interface defers to type-dispatch.
 """
 @struct_hash_equal struct Dispatch
   jltypes::Dict{AlgSort, Type}
 end
-
-"""
-The Initial model assigns `Union{}` to all AlgSorts. There is one implementation
-for any given theory.
-"""
-@struct_hash_equal struct InitialModel′ end
-
-"""
-The Terminal model assigns `Nothing` to all AlgSorts. There is one 
-implementation for any given theory.
-"""
-@struct_hash_equal struct TerminalModel′ end
 
 
 ####################################
@@ -192,14 +180,6 @@ function juliadeclaration(name::Symbol)
             args...
            ) = $name(args...)
 
-      Base.getindex(f::typeof($name), 
-                    ::$(GlobalRef(InterfaceModules, :InitialModel′))
-                   ) = (x...;kw...) -> error("Cannot be called")
-
-      Base.getindex(f::typeof($name), 
-                    ::$(GlobalRef(InterfaceModules, :TerminalModel′))
-                   ) = (x...;kw...) -> nothing
-
       function Base.getindex(::typeof($name), m::Any)
         function $funname(args...) 
           $name($(GlobalRef(InterfaceModules, :Trait))(m), args...)
@@ -235,7 +215,8 @@ function wrapper(name::Symbol, t::Interface, mod)
 
     macro wrapper(n, abs)
       doctarget = gensym()
-      Ts = map($(nameof), $(abstract_sorts)($t))
+      t = $(name).Meta.theory
+      Ts = map($(nameof), $(abstract_sorts)(t))
       Xs = map(Ts) do s 
         :($(GlobalRef($(InterfaceModules), :impl_type))(x, $s))
       end
@@ -289,7 +270,8 @@ function wrapper(name::Symbol, t::Interface, mod)
 
     macro typed_wrapper(n, abs)
       doctarget = gensym()
-      Ts = nameof.($(abstract_sorts)($t))
+      t = $(name).Meta.theory
+      Ts = nameof.($(abstract_sorts)(t))
       Tnames = QuoteNode.(Ts)
       Xs = map(Ts) do s 
         :($(GlobalRef($(InterfaceModules), :impl_type))(x, $s))
@@ -355,7 +337,7 @@ function wrapper(name::Symbol, t::Interface, mod)
         end)
 
       nothing
-      
+
       end)
     end
   end
