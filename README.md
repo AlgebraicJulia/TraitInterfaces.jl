@@ -93,7 +93,7 @@ These wrapper types implicitly pass the trait as a first parameter:
 @test name(joe_animal) == "Joe" # equivalent to name[joe]()
 ```
 
-These wrapper type allow us to write code which generically depends on some unknown / arbitrary implementation of `AnimalInterface`:
+These wrapper types allow us to write code which generically depends on some unknown / arbitrary implementation of `AnimalInterface`:
 
 ```julia 
 two_noises(a::Animal, b::Animal) = noise(a) * " and " * noise(b)
@@ -452,3 +452,8 @@ To locally build the documentation and the literate code examples, run the follo
 ```
 julia --project=docs -e "using TraitInterfaces, LiveServer; servedocs(literate_dir=\"docs/literate\",skip_dir=\"docs/src/generated\")"
 ```
+
+## Caveat
+
+This library is currently under active development, and so is not yet at a point where a constant API/behavior can be assumed. That being said, if this project looks interesting/relevant please contact us and [let us know](https://www.algebraicjulia.org/#contributing)!
+
