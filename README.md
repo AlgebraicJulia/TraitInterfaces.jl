@@ -108,7 +108,7 @@ two_noises(a::Animal, b::Animal) = noise(a) * " and " * noise(b)
 One *could* write some code which *implicitly* expects values which implement a particular interface:
 
 ```julia
-two_noises_unsafe(a, b) = noise[a]() * " and " * noise(b)
+two_noises_unsafe(a, b) = noise[a]() * " and " * noise[b]()
 
 # Works because `joe` happens to implement AnimalInterface
 @test two_noises_unsafe(joe, joe) == "baaaaah? and baaaaah?"
