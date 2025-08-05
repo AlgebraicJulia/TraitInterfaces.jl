@@ -148,9 +148,12 @@ function get_judgment_runtime(instance_module,theory, f_name, args,
   end
   tcs = map(combos) do combo
     try lookup(theory, f_name, combo) catch e nothing end
-  end
+  end |> vec
   # TODO also potentially disambiguate using the return type.
-  only(filter(x->!isnothing(x), tcs))
+  filter!(x->!isnothing(x), tcs)
+  length(tcs) == 1 || error(
+    "Failed to find $f_name with args $args and $whereparams and $jltype_by_sort")
+  only(tcs)
 end
 
 
