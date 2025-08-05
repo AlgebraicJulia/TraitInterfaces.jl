@@ -185,20 +185,21 @@ function strip_lines(expr::Expr; recurse::Bool=false)::Expr
 end
 
 """ Fully Qualified Module Name """
-function fqmn(mod::Module)
+function fqmn(mod::Module)::Pair{Module, Vector{Symbol}}
   names = Symbol[]
   while parentmodule(mod) != mod
     push!(names, nameof(mod))
     mod = parentmodule(mod)
   end
   push!(names, nameof(mod))
-  reverse(names)
+  mod => reverse(names)[2:end]
 end
 
-""" 
-Evaluate an expression `A.B.C.Foo` by calling `eval` on `A` and then
-iteratively calling `getproperty`
-"""
-fq_eval(v::Vector{Symbol}) = foldl(getproperty, [eval(first(v)), v[2:end]...])
+# Modules
+##########
+getpath(m::Module, v::Vector{Symbol}) = foldl(getproperty, v; init=m)
+
+getpathexpr(m::Module, v::Vector{Symbol}, s::Symbol) = 
+  foldl((x,y)->Expr(:., x, QuoteNode(y)), [v; s]; init=nameof(m))
 
 end # module

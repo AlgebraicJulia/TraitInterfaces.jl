@@ -6,7 +6,7 @@ module Check
 
 export implements, impl_type, impl_types
 
-using ...MetaUtils: fq_eval
+using ...MetaUtils: getpath
 using ...Interfaces
 import ...Interfaces.InterfaceModules: impl_type, implements
 
@@ -38,7 +38,7 @@ function implements(m, theory_module::Module, types = nothing)
     implements(m, theory_module, nameof(j), map(signature(j)) do arg 
       haskey(type_dict, arg) && return type_dict[arg]
       n = nameof(arg)
-      fq_eval([T.external[n]; n])
+      getpath(T.external[n][1], [T.external[n][2]; n])
     end)
   end
 end 

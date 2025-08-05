@@ -5,7 +5,7 @@ module Parsing
 
 using MLStyle
 using Markdown
-using ...MetaUtils: fqmn, fq_eval
+using ...MetaUtils: fqmn, getpath
 using ..Algorithms: rename
 using ..Interfaces, ..Algorithms, ..Syntax
 using ..InterfaceData: add_judgment!, add_alias!, allnames
@@ -21,7 +21,7 @@ unquote(s::Symbol) = s
 unquote(s::QuoteNode) = s.value
 
 function parse_line!(theory::Interface, e::Expr, linenumber, 
-                     current_module::Vector{Symbol})
+                     current_module::Pair{Module,Vector{Symbol}})
   try
     @match e begin
       Expr(:tuple, arg1, args...) => begin
@@ -34,7 +34,7 @@ function parse_line!(theory::Interface, e::Expr, linenumber,
             end
             rename_dict = Dict{Symbol, Symbol}([
               unquote(first_key) => unquote(first_val); args′])
-            I = fq_eval([current_module; base_theory]).Meta.theory
+            I = getpath(current_module[1], [current_module[2]; base_theory]).Meta.theory
             union!(theory, rename(I, rename_dict))
           end
           _ => error("Cannot parse")
@@ -66,7 +66,8 @@ function parse_line!(theory::Interface, e::Expr, linenumber,
           line = only(lines)
           iⱼ = parse_binding_line!(theory, line, linenumber)
           n = nameof(theory[iⱼ])
-          theory.external[n] = fqmn(which(fq_eval(current_module), n))
+          curr = getpath(current_module...)
+          theory.external[n] = fqmn(which(curr, n))
         else
           error("Unexpected pseudomacro $mac")
         end

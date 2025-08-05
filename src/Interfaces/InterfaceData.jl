@@ -25,7 +25,7 @@ to distinct abstract types can then cause method ambiguities.
   name::Symbol
   judgments::Vector{Judgment}
   aliases::Dict{Symbol, Symbol}
-  external::Dict{Symbol, Vector{Symbol}} # give a fully-qualified module name
+  external::Dict{Symbol, Pair{Module,Vector{Symbol}}} # give a fully-qualified module name
   defaults::Dict{Int, Expr}
 
   # cached data for easy access
@@ -73,7 +73,7 @@ end
 Base.getindex(f::Interface, i) = f.judgments[i]
 
 Base.copy(f::Interface) = Interface(f.name, deepcopy(f.judgments), 
-  copy(f.aliases), deepcopy(f.external), deepcopy(f.defaults), 
+  copy(f.aliases), copy(f.external), deepcopy(f.defaults), 
   copy(f.types), copy(f.ops), 
   copy(f.accessors), copy(f.axioms), deepcopy(f.lookup))
 

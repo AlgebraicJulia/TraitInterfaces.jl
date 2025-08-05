@@ -137,7 +137,7 @@ end
 # MatC
 #-----
 
-@instance ThTest{Ob=Int, Hom=Matrix{T}} [model::MatC{T}] where T begin
+@instance ThTest{Ob=Int, Hom=Matrix{T}} [model::MatC{T}] where {T<:Number} begin
   compose(m::Matrix{T}, n::Matrix{T}) = m * n
   id(n::Int) = Matrix{T}(LinearAlgebra.I,n,n)
   one(::SpecialType) = 1
