@@ -114,18 +114,33 @@ function parse_binding_line!(theory::Interface, e, linenumber)::Int
 end
 
 function parsedefault!(theory::Interface, call::Expr, body::Expr)::Int
-  call.head == :call || error("Bad default method $call $body")
-  funname = call.args[1]
-  name_srts = map(call.args[2:end]) do arg 
+  funname, callargs, rtype′ = @match call begin 
+    Expr(:call, f, args...) => (f, args, nothing)
+    Expr(:(::), Expr(:call, f, args...), rt) => (f, args, rt)
+    _ => error("Bad default method syntax:\n$call\n$body")
+  end
+
+  # Figure out the arg types
+  name_srts = map(callargs) do arg 
     @match arg begin 
       Expr(:(::), n, s) => (n, s)
     end
   end
   names = first.(name_srts)
   srts = AlgSort.(last.(name_srts))
+
+  # Figure out what operation decl this default method corresponds to
   j = lookup(theory, funname, srts)
   i = findfirst(==(j), theory.judgments)
   j isa TermConstructor || error("Bad $j")
+
+  # check that return type agrees with original signature
+  if !isnothing(rtype′)
+    rtype = parsetype(theory, j.localcontext, rtype′)
+    j.type == rtype || error("Bad return type $(j.type) ≠ $rtype")
+  end
+  
+  # check that variable names agree with original signature
   first.(j.localcontext.args[j.args]) == names || error(
     "Bad names $names")
   theory.defaults[i] = body
