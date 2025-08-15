@@ -260,7 +260,7 @@ function wrapper(name::Symbol, t::Interface, mod)
           j = $(t)[i]
           op = nameof(j)
           :(@inline function $($(name)).$op(x::$(($(:n))), args...; kw...) 
-              $($(name)).$op(Trait(x.val), args...; kw...)
+              $($(name)).$op($($(GlobalRef(InterfaceModules, :Trait)))(x.val), args...; kw...)
           end)
       end...)
 
@@ -332,9 +332,9 @@ function wrapper(name::Symbol, t::Interface, mod)
           j = $(t)[i]
           op = nameof(j)
           :(@inline function $($(name)).$op(x::$(($(:n))), args...; kw...) 
-              $($(name)).$op(Trait(x.val), args...; kw...)
+              $($(name)).$op($($(GlobalRef(InterfaceModules, :Trait)))(x.val), args...; kw...)
           end)
-        end)
+        end...)
 
       nothing
 

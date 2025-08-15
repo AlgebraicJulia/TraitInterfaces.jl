@@ -5,7 +5,7 @@ module Parsing
 
 using MLStyle
 using Markdown
-using ...MetaUtils: fqmn, fq_eval
+using ...MetaUtils: fqmn, getpath
 using ..Algorithms: rename
 using ..Interfaces, ..Algorithms, ..Syntax
 using ..InterfaceData: add_judgment!, add_alias!, allnames
@@ -21,7 +21,7 @@ unquote(s::Symbol) = s
 unquote(s::QuoteNode) = s.value
 
 function parse_line!(theory::Interface, e::Expr, linenumber, 
-                     current_module::Vector{Symbol})
+                     current_module::Pair{Module,Vector{Symbol}})
   try
     @match e begin
       Expr(:tuple, arg1, args...) => begin
@@ -34,7 +34,7 @@ function parse_line!(theory::Interface, e::Expr, linenumber,
             end
             rename_dict = Dict{Symbol, Symbol}([
               unquote(first_key) => unquote(first_val); args′])
-            I = fq_eval([current_module; base_theory]).Meta.theory
+            I = getpath(current_module[1], [current_module[2]; base_theory]).Meta.theory
             union!(theory, rename(I, rename_dict))
           end
           _ => error("Cannot parse")
@@ -66,7 +66,8 @@ function parse_line!(theory::Interface, e::Expr, linenumber,
           line = only(lines)
           iⱼ = parse_binding_line!(theory, line, linenumber)
           n = nameof(theory[iⱼ])
-          theory.external[n] = fqmn(which(fq_eval(current_module), n))
+          curr = getpath(current_module...)
+          theory.external[n] = fqmn(which(curr, n))
         else
           error("Unexpected pseudomacro $mac")
         end
@@ -113,18 +114,33 @@ function parse_binding_line!(theory::Interface, e, linenumber)::Int
 end
 
 function parsedefault!(theory::Interface, call::Expr, body::Expr)::Int
-  call.head == :call || error("Bad default method $call $body")
-  funname = call.args[1]
-  name_srts = map(call.args[2:end]) do arg 
+  funname, callargs, rtype′ = @match call begin 
+    Expr(:call, f, args...) => (f, args, nothing)
+    Expr(:(::), Expr(:call, f, args...), rt) => (f, args, rt)
+    _ => error("Bad default method syntax:\n$call\n$body")
+  end
+
+  # Figure out the arg types
+  name_srts = map(callargs) do arg 
     @match arg begin 
       Expr(:(::), n, s) => (n, s)
     end
   end
   names = first.(name_srts)
   srts = AlgSort.(last.(name_srts))
+
+  # Figure out what operation decl this default method corresponds to
   j = lookup(theory, funname, srts)
   i = findfirst(==(j), theory.judgments)
   j isa TermConstructor || error("Bad $j")
+
+  # check that return type agrees with original signature
+  if !isnothing(rtype′)
+    rtype = parsetype(theory, j.localcontext, rtype′)
+    j.type == rtype || error("Bad return type $(j.type) ≠ $rtype")
+  end
+  
+  # check that variable names agree with original signature
   first.(j.localcontext.args[j.args]) == names || error(
     "Bad names $names")
   theory.defaults[i] = body

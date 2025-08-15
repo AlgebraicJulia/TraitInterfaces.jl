@@ -11,8 +11,7 @@ using MLStyle
 using DataStructures: DefaultDict, OrderedDict
 
 using ...MetaUtils, ...Interfaces
-using ...MetaUtils: fq_eval
-import ...MetaUtils: JuliaFunction
+import ...MetaUtils: JuliaFunction, getpathexpr
 using ...Interfaces.Algorithms: sortcheck
 
 import ...Interfaces.InterfaceModules: InterfaceModules, impl_type, implements
@@ -104,7 +103,7 @@ macro instance(head, model, body)
   # A dictionary to look up the Julia type of a type constructor from its name (an ident)
   jltype_by_sort = Dict{AlgSort,Expr0}([
     zip(abs_sorts, instance_types)..., 
-    [AlgSort(s) => foldl((x,y)->Expr(:., x, QuoteNode(y)), [theory.external[s]; s]) 
+    [AlgSort(s) => getpathexpr(path_diff(__module__,theory.external[s])..., s)  
      for s in nameof.(sorts(theory)) if haskey(theory.external,s)]...
   ]) 
 
@@ -132,7 +131,7 @@ function get_judgment_runtime(instance_module,theory, f_name, args,
         srts = []
         T = where_eval(jtype)
         for s in sorts(theory) 
-          if eval(j_eval[s]) == T
+          if T == j_eval[s]
             push!(srts, s)
           elseif Vararg{j_eval[s]} == T 
             push!(srts, AlgSort(nameof(s), true))
@@ -149,9 +148,12 @@ function get_judgment_runtime(instance_module,theory, f_name, args,
   end
   tcs = map(combos) do combo
     try lookup(theory, f_name, combo) catch e nothing end
-  end
+  end |> vec
   # TODO also potentially disambiguate using the return type.
-  only(filter(x->!isnothing(x), tcs))
+  filter!(x->!isnothing(x), tcs)
+  length(tcs) == 1 || error(
+    "Failed to find $f_name with args $args and $whereparams and $jltype_by_sort")
+  only(tcs)
 end
 
 
@@ -301,7 +303,10 @@ function impl_type_declaration(theory_module, model_type, whereparams, sort, jlt
     if !hasmethod($(GlobalRef(ModelInterface, :impl_type)), 
       ($(model_type) where {$(whereparams...)}, typeof($methd)))
       @inline $(GlobalRef(ModelInterface, :impl_type))(
-        ::$(model_type), ::typeof($methd)) where {$(whereparams...)} = $(jltype)
+        ::$(model_type), ::typeof($methd)) where {$(whereparams...)} = begin 
+          $(whereparams...)
+          $(jltype)
+        end
     end
   end
 end

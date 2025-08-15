@@ -1,6 +1,8 @@
 """ The building blocks that make up an interface """
 module Syntax 
 
+using MLStyle
+
 export AlgSort, AlgTerm, TermApp, TermVar, AlgType, TypeApp, VarArgType, 
        Judgment, TypeScope, Maybe,
        TypeConstructor, TermConstructor, AlgAxiom, AlgAccessor, signature,
@@ -27,6 +29,10 @@ A *sort*, which is essentially a type constructor without arguments
   AlgSort(m::Symbol, v::Bool=false) = new(m, v)
 end
 
+AlgSort(a::Expr, v::Bool=false) = @match a begin 
+  Expr(:curly, f, _...) => AlgSort(f, v)
+  _ => error("unexpected expression $a")
+end
 
 
 Base.nameof(s::AlgSort) = s.method

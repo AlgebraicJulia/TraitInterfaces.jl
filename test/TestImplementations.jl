@@ -25,14 +25,20 @@ import .MyModule: SpecialType
 
 """ A reflexive graph """
 @interface ThReflGraphBool begin
+  # Demonstrating abstract types
   Ob::TYPE
 
+  # demonstrating concrete types
   @import Bool::TYPE
   @import SpecialType::TYPE
 
+  # Demonstrating abstract dependent types
   Hom(dom::Ob, codom::Ob)::TYPE
-  @op (→) := Hom # alias for Hom
 
+  # demonstrating Type aliases
+  @op (→) := Hom
+
+  # demonstrating operations
   id(A::Ob)::(A → A)
 end
 
@@ -40,15 +46,26 @@ end
 
 # Extending a theory
 @interface ThTest <: ThReflGraphBool begin
-  
+  # demonstrating operations which act on fixed, concrete types
   one(a::SpecialType)::Ob
+
+  # demonstrating operations on dependent types
   compose(f::(A → B), g::(B → C))::(A → C) ⊣ [A::Ob, B::Ob, C::Ob]
+  
+  # demonstrating operation aliases
   @op (⋅) := compose
 
+  # Demonstrating axioms
   f⋅id(B) == f ⊣ [A::Ob, B::Ob, f::(A → B)]
   id(A)⋅f == f ⊣ [A::Ob, B::Ob, f::(A → B)]
+  assoc := (f⋅g)⋅h == f⋅(g⋅h) ⊣ [
+    (A,B,C,D)::Ob, f::(A → B), g::(B → C), h::(C → D)]
 
-  assoc := (f⋅g)⋅h == f⋅(g⋅h) ⊣ [(A,B,C,D)::Ob, f::(A → B), g::(B → C), h::(C → D)]
+  # Demonstrating operations with default operations
+  one_or_ob(a::SpecialType, b::Ob)::Ob 
+  function one_or_ob(a::SpecialType, b::Ob)::Ob 
+    ThTest.one[model](a)
+  end
 end
 
 T = ThTest.Meta.theory;
@@ -129,18 +146,21 @@ end
 
 @test !implements(3, ThTest)
 
-@withmodel FinSetC() (⋅, id) begin
+@withmodel FinSetC() (⋅, id, one_or_ob) begin
   s21, s12 = SVector{2}.([[2,1],[1,2]])
   @test s21 ⋅ s21 ⋅ id(2) == s12
+  one_or_ob(SpecialType(), 5) == 1
 end
 
 # MatC
 #-----
 
-@instance ThTest{Ob=Int, Hom=Matrix{T}} [model::MatC{T}] where T begin
+@instance ThTest{Ob=Int, Hom=Matrix{T}} [model::MatC{T}] where {T<:Number} begin
   compose(m::Matrix{T}, n::Matrix{T}) = m * n
   id(n::Int) = Matrix{T}(LinearAlgebra.I,n,n)
   one(::SpecialType) = 1
+  # override the default
+  one_or_ob(a::SpecialType, b::Int)::Int = b
 end
 
 # The implementation type can depend on type parameters of the model.
@@ -156,6 +176,9 @@ w = TestWrapper(MatC{Int}())
 
 x = TestTypedWrapper(MatC{Int}())
 @test x isa TestTypedWrapper{Int, Matrix{Int}}
+
+# test that default method was overwritten
+one_or_ob(w, SpecialType(), 4) == 4
 
 
 # Fixed methods
