@@ -3,7 +3,7 @@
 module MetaUtils
 export JuliaFunction, setimpl, setname, JuliaFunctionSig, parse_docstring, 
        parse_function, parse_function_sig, generate_docstring, 
-       generate_function, strip_lines, Expr0, fqmn
+       generate_function, strip_lines, Expr0, fqmn, path_diff
 
 using Base.Meta: ParseError
 using StructEquality
@@ -201,5 +201,21 @@ getpath(m::Module, v::Vector{Symbol}) = foldl(getproperty, v; init=m)
 
 getpathexpr(m::Module, v::Vector{Symbol}, s::Symbol) = 
   foldl((x,y)->Expr(:., x, QuoteNode(y)), [v; s]; init=nameof(m))
+
+""" Try to interpret a globally-named `p` (e.g. "X.Y.Z") in a module "A.B"
+
+We check if any prefix of `p` is equal to the module we're actually evaluating 
+in, and if this works then we return just the remainder of the path. If this 
+doesn't work, we just use the global name and hope its module is in scope in `p`.
+"""
+function path_diff(m::Module, p::Pair{Module, Vector{Symbol}}
+                  )::Pair{Module, Vector{Symbol}}
+  pm, pp = p 
+  for (i,name) in enumerate(pp) 
+    pm = getproperty(pm, name)
+    pm == m && return m => pp[i+1:end]
+  end
+  p
+end
 
 end # module

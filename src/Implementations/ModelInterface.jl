@@ -103,7 +103,7 @@ macro instance(head, model, body)
   # A dictionary to look up the Julia type of a type constructor from its name (an ident)
   jltype_by_sort = Dict{AlgSort,Expr0}([
     zip(abs_sorts, instance_types)..., 
-    [AlgSort(s) => getpathexpr(theory.external[s]..., s)  
+    [AlgSort(s) => getpathexpr(path_diff(__module__,theory.external[s])..., s)  
      for s in nameof.(sorts(theory)) if haskey(theory.external,s)]...
   ]) 
 
