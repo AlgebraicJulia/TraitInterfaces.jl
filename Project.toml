@@ -11,7 +11,7 @@ Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
 StructEquality = "6ec83bb0-ed9f-11e9-3b4c-2b04cb4e219c"
 
 [compat]
-DataStructures = "0.18.22"
+DataStructures = "0.18.22, 0.19"
 MLStyle = "0.4.17"
 Markdown = "1.10.0"
 Reexport = "1.2.2"
