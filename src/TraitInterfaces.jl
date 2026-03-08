@@ -2,6 +2,7 @@ module TraitInterfaces
 
 using Reexport 
 
+include("DynTrait.jl")
 include("MetaUtils.jl")
 
 include("Interfaces/module.jl")

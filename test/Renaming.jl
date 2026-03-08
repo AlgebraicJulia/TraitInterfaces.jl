@@ -4,22 +4,18 @@ using TraitInterfaces, Test
 
 @interface ThMonoid begin
   X::TYPE
-
   unit()::X
   @op (e) := unit
-
   mul(x::X,y::X)::X
   @op (⋅) := mul
-
   assoc := (x ⋅ y) ⋅ z == x ⋅ (y⋅ z) ⊣ [(x,y,z)::X]
   unitality := ((e() ⋅ x) == x == (x ⋅ e())) ⊣ [x::X]
 end
 
 
 @interface ThGroup <: ThMonoid begin
-  inv(x::X)::X
-  @op (⁻¹) := inv
-
+  inverse(x::X)::X
+  @op (⁻¹) := inverse
   ⁻¹(x) ⋅ x == x == x ⋅ ⁻¹(x) ⊣ [x::X]
 end
 
@@ -31,12 +27,10 @@ module RingModule
   export ThRing
   using TraitInterfaces
   using ..ThAbGroup, ..ThMonoid
-
   @interface ThRing begin
     using ThAbGroup: unit => zero, mul => plus,  :⋅ => :+, e => Z, 
-                     inv => minus, ⁻¹ => :-
+                     inverse => minus, ⁻¹ => :-
     using ThMonoid:  unit => one,  mul => times, :⋅ => :×, e => I
-
     left_distrib  := a × (b + c) == (a × b) + (a × c) ⊣ [(a, b, c)::X]
     right_distrib := (b + c) × a == (b × a) + (c × a) ⊣ [(a, b, c)::X]
   end
